@@ -69,6 +69,38 @@
 	$: nothingDays = Object.values(availability).filter(d => !d.run && !d.ride).length;
 	$: hasPlan = Object.values(availability).some(d => d.plan);
 
+	// Map of other races' plans + race days to overlay on calendar
+	$: otherRacesMap = buildOtherRacesMap(programmes, selectedIdx);
+
+	function buildOtherRacesMap(progs, currentIdx) {
+		const map = {};
+		for (let i = 0; i < progs.length; i++) {
+			if (i === currentIdx) continue;
+			const p = progs[i];
+			// Mark this race's day
+			if (p.race_date) {
+				if (!map[p.race_date]) map[p.race_date] = {};
+				map[p.race_date].isOtherRaceDay = true;
+				map[p.race_date].raceName = p.race_name;
+				map[p.race_date].raceDistance = p.race_distance_km;
+			}
+			// Overlay plans from earlier races
+			const avail = p.availability || {};
+			for (const [date, val] of Object.entries(avail)) {
+				if (date.startsWith('_')) continue; // skip _ai_analysis
+				if (val?.plan) {
+					if (!map[date]) map[date] = {};
+					// Only overlay if it's from a race BEFORE the current one
+					if (p.race_date < progs[currentIdx]?.race_date) {
+						map[date].otherPlan = val.plan;
+						map[date].fromRace = p.race_name;
+					}
+				}
+			}
+		}
+		return map;
+	}
+
 	// === LIFECYCLE ===
 	onMount(async () => {
 		try {
@@ -809,6 +841,7 @@
 	{#each calendarDays as day, i}
 		{@const a = availability[day.date]}
 		{@const plan = a?.plan}
+		{@const other = otherRacesMap[day.date]}
 		{@const isNewWeek = day.isMonday && i > 0}
 		{@const weekNum = Math.ceil((i + 1) / 7)}
 
@@ -821,9 +854,10 @@
 		<div class="v-day"
 			class:today={day.isToday}
 			class:race-day={day.isRaceDay}
+			class:other-race-day={other?.isOtherRaceDay}
 			class:weekend={day.isWeekend}
-			class:has-plan={!!plan}
-			class:rest={a && !a.run && !a.ride}
+			class:has-plan={!!plan || !!other?.otherPlan}
+			class:rest={a && !a.run && !a.ride && !other?.isOtherRaceDay}
 		>
 			<!-- Date column -->
 			<div class="v-date">
@@ -835,6 +869,8 @@
 			<!-- Availability toggles -->
 			{#if day.isRaceDay}
 				<div class="v-race-badge">🏁 COURSE</div>
+			{:else if other?.isOtherRaceDay}
+				<div class="v-race-badge other">🏁 {other.raceName} ({other.raceDistance}km)</div>
 			{:else}
 				<div class="v-toggles">
 					<button class="v-tog" class:on={a?.run} on:click={() => toggleAvailability(day.date, 'run')} title="Run">🏃</button>
@@ -859,7 +895,23 @@
 							<p class="plan-desc">{plan.description}</p>
 						{/if}
 					</div>
-				{:else if day.isRaceDay}
+				{:else if other?.otherPlan}
+					<div class="plan-card other-plan" style="border-left-color: {intensityColor(other.otherPlan.intensity)}">
+						<div class="plan-top">
+							<span class="plan-sport">{sportEmoji(other.otherPlan.sport)}</span>
+							<span class="plan-title">{other.otherPlan.title}</span>
+							<span class="plan-type" style="color: {intensityColor(other.otherPlan.intensity)}">{typeLabel(other.otherPlan.type)}</span>
+						</div>
+						<div class="plan-details">
+							{#if other.otherPlan.duration_min}<span>⏱ {other.otherPlan.duration_min}min</span>{/if}
+							{#if other.otherPlan.distance_km}<span>📏 {other.otherPlan.distance_km}km</span>{/if}
+							<span class="plan-from">📋 {other.fromRace}</span>
+						</div>
+						{#if other.otherPlan.description}
+							<p class="plan-desc">{other.otherPlan.description}</p>
+						{/if}
+					</div>
+				{:else if day.isRaceDay || other?.isOtherRaceDay}
 					<!-- nothing -->
 				{:else if a && !a.run && !a.ride}
 					<span class="plan-rest">😴 Repos</span>
@@ -1031,10 +1083,14 @@
 	.v-tog.on { opacity: 1; filter: grayscale(0%); border-color: var(--accent); }
 
 	.v-race-badge { background: rgba(0,210,160,0.15); color: var(--success); font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 12px; flex-shrink: 0; }
+	.v-race-badge.other { background: rgba(168,85,247,0.12); color: #a855f7; font-size: 0.7rem; font-weight: 600; }
+	.v-day.other-race-day { background: rgba(168,85,247,0.06); border-left: 2px solid #a855f7; }
 
 	.v-plan { flex: 1; min-width: 0; }
 
 	.plan-card { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius-md); padding: 8px 12px; }
+	.plan-card.other-plan { opacity: 0.7; border-style: dashed; border-left-style: solid; }
+	.plan-from { font-size: 0.65rem; color: #a855f7; font-style: italic; }
 	.plan-top { display: flex; align-items: center; gap: 6px; }
 	.plan-sport { font-size: 0.85rem; }
 	.plan-title { font-size: 0.82rem; font-weight: 600; flex: 1; }
