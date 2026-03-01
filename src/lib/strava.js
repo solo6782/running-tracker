@@ -1,9 +1,6 @@
 const STRAVA_API = 'https://www.strava.com/api/v3';
 const STRAVA_OAUTH = 'https://www.strava.com/oauth';
 
-/**
- * Génère l'URL d'autorisation Strava OAuth2
- */
 export function getStravaAuthUrl(clientId, redirectUri) {
 	const params = new URLSearchParams({
 		client_id: clientId,
@@ -15,9 +12,6 @@ export function getStravaAuthUrl(clientId, redirectUri) {
 	return `${STRAVA_OAUTH}/authorize?${params}`;
 }
 
-/**
- * Échange le code OAuth contre un token d'accès
- */
 export async function exchangeToken(clientId, clientSecret, code) {
 	const res = await fetch(`${STRAVA_OAUTH}/token`, {
 		method: 'POST',
@@ -29,39 +23,25 @@ export async function exchangeToken(clientId, clientSecret, code) {
 			grant_type: 'authorization_code'
 		})
 	});
-
-	if (!res.ok) {
-		throw new Error(`Strava token exchange failed: ${res.status}`);
-	}
-
+	if (!res.ok) throw new Error(`Strava token exchange failed: ${res.status}`);
 	return res.json();
 }
 
-/**
- * Rafraîchit le token d'accès Strava
- */
-export async function refreshToken(clientId, clientSecret, refreshToken) {
+export async function refreshToken(clientId, clientSecret, refToken) {
 	const res = await fetch(`${STRAVA_OAUTH}/token`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
 			client_id: clientId,
 			client_secret: clientSecret,
-			refresh_token: refreshToken,
+			refresh_token: refToken,
 			grant_type: 'refresh_token'
 		})
 	});
-
-	if (!res.ok) {
-		throw new Error(`Strava token refresh failed: ${res.status}`);
-	}
-
+	if (!res.ok) throw new Error(`Strava token refresh failed: ${res.status}`);
 	return res.json();
 }
 
-/**
- * Récupère le token valide (refresh si expiré)
- */
 export async function getValidToken(user, clientId, clientSecret, supabaseAdmin) {
 	const now = new Date();
 	const expiresAt = new Date(user.strava_token_expires_at);
@@ -70,10 +50,8 @@ export async function getValidToken(user, clientId, clientSecret, supabaseAdmin)
 		return user.strava_access_token;
 	}
 
-	// Token expiré, on refresh
 	const data = await refreshToken(clientId, clientSecret, user.strava_refresh_token);
 
-	// Mise à jour en base
 	await supabaseAdmin
 		.from('rt_users')
 		.update({
@@ -86,44 +64,26 @@ export async function getValidToken(user, clientId, clientSecret, supabaseAdmin)
 	return data.access_token;
 }
 
-/**
- * Récupère une activité détaillée depuis Strava
- */
 export async function fetchActivity(accessToken, activityId) {
 	const res = await fetch(`${STRAVA_API}/activities/${activityId}`, {
 		headers: { Authorization: `Bearer ${accessToken}` }
 	});
-
-	if (!res.ok) {
-		throw new Error(`Strava fetch activity failed: ${res.status}`);
-	}
-
+	if (!res.ok) throw new Error(`Strava fetch activity failed: ${res.status}`);
 	return res.json();
 }
 
-/**
- * Récupère les activités par page (pour l'import initial)
- */
 export async function fetchActivitiesPage(accessToken, page = 1, perPage = 100) {
 	const params = new URLSearchParams({
 		page: String(page),
 		per_page: String(perPage)
 	});
-
 	const res = await fetch(`${STRAVA_API}/athlete/activities?${params}`, {
 		headers: { Authorization: `Bearer ${accessToken}` }
 	});
-
-	if (!res.ok) {
-		throw new Error(`Strava fetch activities failed: ${res.status}`);
-	}
-
+	if (!res.ok) throw new Error(`Strava fetch activities failed: ${res.status}`);
 	return res.json();
 }
 
-/**
- * Mappe une activité Strava vers notre schéma DB
- */
 export function mapStravaActivity(stravaActivity, userId) {
 	return {
 		user_id: userId,

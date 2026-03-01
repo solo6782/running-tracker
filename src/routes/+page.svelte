@@ -34,6 +34,12 @@
 		<p class="subtitle">Suivi multi-sport intelligent</p>
 	</div>
 
+	{#if data.error}
+		<div class="card error-card">
+			<p class="error-text">⚠️ {data.error}</p>
+		</div>
+	{/if}
+
 	{#if !data.isConnected}
 		<div class="card">
 			<h2>Connexion Strava</h2>
@@ -111,6 +117,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
+	}
+
+	.error-card {
+		border-color: var(--danger);
+		background: rgba(255, 107, 107, 0.1);
+	}
+
+	.error-text {
+		color: var(--danger);
+		font-family: var(--font-mono);
+		font-size: 0.85rem;
+		word-break: break-all;
 	}
 
 	.card h2 {

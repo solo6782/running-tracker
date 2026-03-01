@@ -1,16 +1,12 @@
 import { json } from '@sveltejs/kit';
 import { createServerClient } from '$lib/supabase.js';
+import { getEnv } from '$lib/env.js';
 import { fetchActivitiesPage, getValidToken, mapStravaActivity } from '$lib/strava.js';
 
-/**
- * POST — Import initial de tout l'historique Strava
- * Pagine à travers toutes les activités (100 par page) et les insère en base
- */
 export async function POST({ platform }) {
-	const env = platform?.env || {};
-	const supabaseAdmin = createServerClient(env.SUPABASE_SERVICE_ROLE_KEY);
+	const env = getEnv(platform);
+	const supabaseAdmin = createServerClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
-	// Récupère l'utilisateur (mono-utilisateur)
 	const { data: users } = await supabaseAdmin
 		.from('rt_users')
 		.select('*')
@@ -38,7 +34,6 @@ export async function POST({ platform }) {
 				break;
 			}
 
-			// Mappe et insère les activités par batch
 			const mapped = activities.map((a) => mapStravaActivity(a, user.id));
 
 			const { error } = await supabaseAdmin
@@ -52,14 +47,12 @@ export async function POST({ platform }) {
 			totalImported += activities.length;
 			console.log(`Imported page ${page}: ${activities.length} activities (total: ${totalImported})`);
 
-			// Strava retourne moins de 100 = dernière page
 			if (activities.length < 100) {
 				hasMore = false;
 			}
 
 			page++;
 
-			// Petit délai pour respecter le rate limit Strava (100 req/15min)
 			if (page % 10 === 0) {
 				await new Promise((r) => setTimeout(r, 2000));
 			}
