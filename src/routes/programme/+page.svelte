@@ -9,14 +9,48 @@
 	let raceElevation = null;
 	let raceProfile = '';
 	let raceUrl = '';
-	let objectiveType = 'finish'; // 'finish' or 'time'
-	let objectiveTime = ''; // e.g. "1:45:00"
+	let objectiveType = 'finish';
+	let objectiveTime = '';
 	let programCreated = false;
+	let programmeId = null;
+	let loading = true;
+	let saving = false;
+	let saveTimeout;
 
 	// Search state
 	let searching = false;
 	let searchResult = null;
 	let searchError = '';
+
+	// Load active programme on mount
+	onMount(async () => {
+		try {
+			const res = await fetch('/api/programme');
+			const data = await res.json();
+			if (data.programme) {
+				loadProgramme(data.programme);
+			}
+		} catch (err) {
+			console.error('Error loading programme:', err);
+		} finally {
+			loading = false;
+		}
+	});
+
+	function loadProgramme(p) {
+		programmeId = p.id;
+		raceName = p.race_name;
+		raceDate = p.race_date;
+		raceDistance = p.race_distance_km;
+		raceLocation = p.race_location || '';
+		raceElevation = p.race_elevation_gain;
+		raceProfile = p.race_profile || '';
+		raceUrl = p.race_url || '';
+		objectiveType = p.objective_type || 'finish';
+		objectiveTime = p.objective_time || '';
+		availability = p.availability || {};
+		programCreated = true;
+	}
 
 	async function searchRace() {
 		if (!raceName || raceName.length < 3) return;
@@ -36,7 +70,6 @@
 				searchError = data.error;
 			} else if (data.found) {
 				searchResult = data;
-				// Auto-fill fields
 				if (data.name) raceName = data.name;
 				if (data.date) raceDate = data.date;
 				if (data.distance_km) raceDistance = data.distance_km;
@@ -59,16 +92,14 @@
 		searchError = '';
 	}
 
-	// Calendar data: { 'YYYY-MM-DD': { run: bool, ride: bool } }
+	// Calendar data
 	let availability = {};
 
-	// Generate calendar weeks from today to race date
 	$: calendarWeeks = generateCalendar(raceDate);
 	$: daysUntilRace = raceDate ? Math.ceil((new Date(raceDate) - new Date()) / (1000 * 60 * 60 * 24)) : 0;
 	$: weeksUntilRace = Math.ceil(daysUntilRace / 7);
 
 	// Stats
-	$: totalDays = Object.keys(availability).length;
 	$: runDays = Object.values(availability).filter(d => d.run).length;
 	$: rideDays = Object.values(availability).filter(d => d.ride).length;
 	$: bothDays = Object.values(availability).filter(d => d.run && d.ride).length;
@@ -84,13 +115,11 @@
 
 		if (end <= today) return [];
 
-		// Start from Monday of current week
 		const start = new Date(today);
 		const dayOfWeek = start.getDay();
 		const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
 		start.setDate(start.getDate() + diff);
 
-		// End on Sunday after race date
 		const calEnd = new Date(end);
 		const endDow = calEnd.getDay();
 		if (endDow !== 0) {
@@ -133,14 +162,37 @@
 			availability[dateStr] = { run: false, ride: false };
 		}
 		availability[dateStr][type] = !availability[dateStr][type];
-		availability = availability; // trigger reactivity
+		availability = availability;
+		debounceSaveAvailability();
 	}
 
-	function createProgram() {
-		if (!raceName || !raceDate || !raceDistance) return;
-		programCreated = true;
+	// Debounced save - waits 500ms after last change
+	function debounceSaveAvailability() {
+		clearTimeout(saveTimeout);
+		saveTimeout = setTimeout(() => saveAvailability(), 500);
+	}
 
-		// Initialize all training days with both options available
+	async function saveAvailability() {
+		if (!programmeId) return;
+		saving = true;
+		try {
+			await fetch('/api/programme', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ id: programmeId, availability })
+			});
+		} catch (err) {
+			console.error('Save error:', err);
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function createProgram() {
+		if (!raceName || !raceDate || !raceDistance) return;
+		saving = true;
+
+		// Initialize all training days
 		for (const week of calendarWeeks) {
 			for (const day of week) {
 				if (day.isTrainingDay && !availability[day.date]) {
@@ -149,14 +201,56 @@
 			}
 		}
 		availability = availability;
+
+		try {
+			const res = await fetch('/api/programme', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					race_name: raceName,
+					race_date: raceDate,
+					race_distance_km: parseFloat(raceDistance),
+					race_location: raceLocation || null,
+					race_elevation_gain: raceElevation || null,
+					race_profile: raceProfile || null,
+					race_url: raceUrl || null,
+					race_description: searchResult?.description || null,
+					objective_type: objectiveType,
+					objective_time: objectiveType === 'time' ? objectiveTime : null,
+					availability
+				})
+			});
+			const data = await res.json();
+			if (data.programme) {
+				programmeId = data.programme.id;
+				programCreated = true;
+			}
+		} catch (err) {
+			console.error('Create error:', err);
+		} finally {
+			saving = false;
+		}
 	}
 
-	function resetProgram() {
+	async function resetProgram() {
+		if (programmeId) {
+			await fetch(`/api/programme?id=${programmeId}`, { method: 'DELETE' });
+		}
 		programCreated = false;
+		programmeId = null;
 		availability = {};
+		raceName = '';
+		raceDate = '';
+		raceDistance = '';
+		raceLocation = '';
+		raceElevation = null;
+		raceProfile = '';
+		raceUrl = '';
+		objectiveType = 'finish';
+		objectiveTime = '';
+		searchResult = null;
 	}
 
-	// Quick fill helpers
 	function setAllDays(type, value) {
 		for (const week of calendarWeeks) {
 			for (const day of week) {
@@ -169,13 +263,12 @@
 			}
 		}
 		availability = availability;
+		debounceSaveAvailability();
 	}
 
-	// Month labels
 	const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
 
 	function getWeekMonthLabel(week) {
-		// Return month label if this week contains the 1st of a month
 		for (const day of week) {
 			if (day.day <= 7 && day.day >= 1) {
 				return monthNames[day.month];
@@ -184,7 +277,6 @@
 		return null;
 	}
 
-	// Distance presets
 	const distances = [
 		{ label: '5K', value: 5 },
 		{ label: '10K', value: 10 },
@@ -200,7 +292,13 @@
 
 <div class="page">
 
-	{#if !programCreated}
+	{#if loading}
+	<div class="loading-state">
+		<span class="spinner-lg"></span>
+		<p>Chargement du programme...</p>
+	</div>
+
+	{:else if !programCreated}
 	<!-- ===== SETUP FORM ===== -->
 	<div class="setup-section">
 		<div class="setup-header">
@@ -346,9 +444,13 @@
 			<button
 				class="btn-create"
 				on:click={createProgram}
-				disabled={!raceName || !raceDate || !raceDistance}
+				disabled={!raceName || !raceDate || !raceDistance || saving}
 			>
-				Créer le programme →
+				{#if saving}
+					<span class="spinner"></span> Création...
+				{:else}
+					Créer le programme →
+				{/if}
 			</button>
 		</div>
 	</div>
@@ -383,6 +485,9 @@
 		<button class="btn-reset" on:click={resetProgram}>✏️ Modifier</button>
 		{#if raceUrl}
 			<a href={raceUrl} target="_blank" rel="noopener" class="btn-ext">🔗</a>
+		{/if}
+		{#if saving}
+			<span class="save-indicator"><span class="spinner-sm"></span> Sauvegarde...</span>
 		{/if}
 	</div>
 
@@ -529,6 +634,44 @@
 		max-width: 900px;
 		margin: 0 auto;
 		padding: 24px 16px 60px;
+	}
+
+	/* Loading */
+	.loading-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 12px;
+		padding: 80px 0;
+		color: var(--text-muted);
+		font-size: 0.88rem;
+	}
+	.spinner-lg {
+		width: 28px;
+		height: 28px;
+		border: 3px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	/* Save indicator */
+	.save-indicator {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.72rem;
+		color: var(--text-muted);
+		flex-shrink: 0;
+	}
+	.spinner-sm {
+		width: 12px;
+		height: 12px;
+		border: 2px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
 	}
 
 	/* ===== SETUP FORM ===== */
@@ -791,6 +934,10 @@
 		cursor: pointer;
 		transition: background 0.15s;
 		margin-top: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
 	}
 	.btn-create:hover { background: var(--accent-light); }
 	.btn-create:disabled {
