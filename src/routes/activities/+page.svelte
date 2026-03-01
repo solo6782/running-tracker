@@ -391,6 +391,7 @@
 		background: var(--bg-secondary);
 		border-bottom: 1px solid var(--border);
 		gap: 4px;
+		min-width: 860px;
 	}
 	.list-header .col {
 		font-size: 0.72rem;
@@ -412,6 +413,7 @@
 		align-items: center;
 		border-bottom: 1px solid var(--border);
 		transition: background 0.1s;
+		min-width: 860px;
 	}
 	.activity-row:last-child { border-bottom: none; }
 	.activity-row:hover { background: var(--bg-card-hover); }
@@ -429,14 +431,14 @@
 	.row-link:hover { text-decoration: none; }
 
 	.col { flex-shrink: 0; }
-	.col-date { width: 100px; }
-	.col-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-	.col-dist { width: 68px; text-align: right; }
-	.col-time { width: 58px; text-align: right; }
-	.col-pace { width: 70px; text-align: right; }
-	.col-hr { width: 55px; text-align: right; }
-	.col-rpe { width: 100px; padding: 0 2px; }
-	.col-feel { width: 80px; padding: 0 4px; }
+	.col-date { width: 90px; }
+	.col-name { flex: 1; max-width: 200px; min-width: 100px; display: flex; flex-direction: column; gap: 3px; }
+	.col-dist { width: 65px; text-align: right; }
+	.col-time { width: 55px; text-align: right; }
+	.col-pace { width: 65px; text-align: right; }
+	.col-hr { width: 52px; text-align: right; }
+	.col-rpe { width: 180px; padding: 0 4px; }
+	.col-feel { width: 105px; padding: 0 4px; }
 
 	.date-text {
 		font-size: 0.8rem;
@@ -471,16 +473,16 @@
 	/* RPE selector */
 	.rpe-selector {
 		display: flex;
-		gap: 2px;
+		gap: 1px;
 	}
 	.rpe-dot {
-		width: 18px;
-		height: 18px;
+		width: 16px;
+		height: 16px;
 		border-radius: 50%;
 		border: 1.5px solid var(--border);
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.55rem;
+		font-size: 0.5rem;
 		font-family: var(--font-mono);
 		font-weight: 600;
 		display: flex;
@@ -505,12 +507,12 @@
 	/* Feeling selector */
 	.feeling-selector {
 		display: flex;
-		gap: 1px;
+		gap: 0px;
 	}
 	.feeling-btn {
 		background: none;
 		border: none;
-		font-size: 0.75rem;
+		font-size: 0.8rem;
 		padding: 1px;
 		opacity: 0.35;
 		transition: all 0.15s;
