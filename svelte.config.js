@@ -1,6 +1,18 @@
-import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import adapter from '@sveltejs/adapter-cloudflare';
 
-export default defineConfig({
-	plugins: [sveltekit()]
-});
+const config = {
+	kit: {
+		adapter: adapter()
+	}
+};
+
+export default config;
+```
+
+**Problème 2** : la commande de deploy. Dans les settings Cloudflare de ton projet, change le **Deploy command** de :
+```
+npx wrangler deploy
+```
+vers :
+```
+npx wrangler pages deploy .svelte-kit/cloudflare
