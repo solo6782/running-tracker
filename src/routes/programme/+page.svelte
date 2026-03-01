@@ -78,8 +78,7 @@
 			// Check URL params for Withings redirect result
 			const params = new URLSearchParams(window.location.search);
 			if (params.get('withings') === 'connected') {
-				fetchWithings();
-				// Clean URL
+				fetchWithings(true); // force sync on first connect
 				window.history.replaceState({}, '', '/programme');
 			}
 		} catch (err) {
@@ -90,10 +89,10 @@
 		}
 	});
 
-	async function fetchWithings() {
+	async function fetchWithings(sync = false) {
 		withingsLoading = true;
 		try {
-			const res = await fetch('/api/withings');
+			const res = await fetch(`/api/withings${sync ? '?sync=1' : ''}`);
 			const data = await res.json();
 			withingsConnected = data.connected;
 			if (data.connected && data.latest) {
@@ -109,6 +108,10 @@
 		} finally {
 			withingsLoading = false;
 		}
+	}
+
+	async function syncWithings() {
+		await fetchWithings(true);
 	}
 
 	function loadProgramme(p) {
@@ -466,6 +469,18 @@
 					{#if withingsLatest.muscle_mass}
 						<span class="ws-val">{withingsLatest.muscle_mass.value}kg muscles</span>
 					{/if}
+					{#if withingsLatest.fat_mass}
+						<span class="ws-val">{withingsLatest.fat_mass.value}kg m.grasse</span>
+					{/if}
+					{#if withingsLatest.hydration}
+						<span class="ws-val">{withingsLatest.hydration.value}kg hydrat.</span>
+					{/if}
+					{#if withingsLatest.bone_mass}
+						<span class="ws-val">{withingsLatest.bone_mass.value}kg os</span>
+					{/if}
+					<button class="btn-sync" on:click={syncWithings} disabled={withingsLoading}>
+						{#if withingsLoading}<span class="spinner-sm"></span>{:else}🔄{/if}
+					</button>
 				</div>
 			{:else}
 				<a href="/auth/withings" class="btn-withings">
@@ -575,9 +590,18 @@
 				{#if withingsLatest.muscle_mass}
 					<div class="wb-val"><span class="wb-lbl">Muscles</span> {withingsLatest.muscle_mass.value}kg</div>
 				{/if}
+				{#if withingsLatest.fat_mass}
+					<div class="wb-val"><span class="wb-lbl">M.grasse</span> {withingsLatest.fat_mass.value}kg</div>
+				{/if}
+				{#if withingsLatest.hydration}
+					<div class="wb-val"><span class="wb-lbl">Hydrat.</span> {withingsLatest.hydration.value}kg</div>
+				{/if}
 				{#if withingsLatest.bone_mass}
 					<div class="wb-val"><span class="wb-lbl">Os</span> {withingsLatest.bone_mass.value}kg</div>
 				{/if}
+				<button class="btn-sync-sm" on:click={syncWithings} disabled={withingsLoading} title="Synchroniser Withings">
+					{#if withingsLoading}<span class="spinner-sm"></span>{:else}🔄{/if}
+				</button>
 			</div>
 		{:else}
 			<a href="/auth/withings" class="pb-connect">⚖️ Withings</a>
@@ -880,4 +904,11 @@
 	.wb-lbl { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; }
 	.pb-connect { font-size: 0.72rem; color: #00b4d8; text-decoration: none; padding: 3px 8px; border: 1px solid #00b4d8; border-radius: var(--radius-sm); margin-left: 8px; white-space: nowrap; }
 	.pb-connect:hover { background: rgba(0,180,216,0.1); text-decoration: none; }
+
+	.btn-sync { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.75rem; padding: 3px 6px; cursor: pointer; line-height: 1; }
+	.btn-sync:hover { border-color: var(--accent); }
+	.btn-sync:disabled { opacity: 0.4; cursor: not-allowed; }
+	.btn-sync-sm { background: none; border: none; font-size: 0.7rem; padding: 2px; cursor: pointer; opacity: 0.6; }
+	.btn-sync-sm:hover { opacity: 1; }
+	.btn-sync-sm:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>

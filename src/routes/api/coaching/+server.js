@@ -30,48 +30,38 @@ export async function POST({ request, platform }) {
 		.limit(1)
 		.single();
 
-	// 2b. Load Withings body composition if available
+	// 2b. Load Withings body composition from cache table
 	let withingsData = null;
-	const { data: withingsTokens } = await supabase
-		.from('rt_withings_tokens')
+	let withingsHistory = null;
+
+	const { data: withingsMeasures } = await supabase
+		.from('rt_withings_measures')
 		.select('*')
-		.limit(1)
-		.single();
-	
-	if (withingsTokens) {
-		try {
-			// Dynamically import to avoid issues if not configured
-			const { getMeasures, refreshTokens, parseMeasureValue, MEASURE_TYPES } = await import('$lib/withings.js');
-			
-			let accessToken = withingsTokens.access_token;
-			if (new Date(withingsTokens.expires_at) < new Date()) {
-				const newTokens = await refreshTokens(withingsTokens.refresh_token, env.WITHINGS_CLIENT_ID, env.WITHINGS_CLIENT_SECRET);
-				accessToken = newTokens.access_token;
-				await supabase.from('rt_withings_tokens').update({
-					access_token: newTokens.access_token,
-					refresh_token: newTokens.refresh_token,
-					expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString()
-				}).eq('id', withingsTokens.id);
-			}
-			
-			const threeMonthsAgo = Math.floor((Date.now() - 90 * 24 * 3600 * 1000) / 1000);
-			const body = await getMeasures(accessToken, { startdate: threeMonthsAgo });
-			
-			// Parse latest values
-			const latestValues = {};
-			const typeNames = { 1: 'weight_kg', 6: 'fat_ratio', 76: 'muscle_mass_kg', 88: 'bone_mass_kg' };
-			for (const grp of (body.measuregrps || []).slice(0, 20)) {
-				for (const m of grp.measures || []) {
-					const name = typeNames[m.type];
-					if (name && !latestValues[name]) {
-						latestValues[name] = Math.round(parseMeasureValue(m) * 100) / 100;
-					}
+		.order('measure_date', { ascending: false })
+		.limit(200);
+
+	if (withingsMeasures && withingsMeasures.length > 0) {
+		// Latest values
+		const latestValues = {};
+		const fields = ['weight_kg', 'fat_ratio_pct', 'fat_mass_kg', 'fat_free_mass_kg', 'muscle_mass_kg', 'bone_mass_kg', 'hydration_kg'];
+		for (const field of fields) {
+			for (const row of withingsMeasures) {
+				if (row[field] != null) {
+					latestValues[field] = Number(row[field]);
+					break;
 				}
 			}
-			withingsData = latestValues;
-		} catch (e) {
-			console.error('Withings coaching fetch error:', e);
 		}
+		withingsData = latestValues;
+
+		// Full history for Claude
+		withingsHistory = withingsMeasures.map(row => {
+			const entry = { date: row.measure_date };
+			for (const field of fields) {
+				if (row[field] != null) entry[field] = Number(row[field]);
+			}
+			return entry;
+		}).filter(e => Object.keys(e).length > 1);
 	}
 
 	// 3. Load training history (last 6 months of activities)
@@ -171,9 +161,16 @@ ${profile?.height_cm ? `- Taille : ${profile.height_cm} cm` : ''}
 ${profile?.resting_hr ? `- FC repos : ${profile.resting_hr} bpm` : ''}
 ${profile?.max_hr ? `- FC max : ${profile.max_hr} bpm` : ''}
 ${profile?.notes ? `- Notes : ${profile.notes}` : ''}
-${withingsData?.fat_ratio ? `- Taux de graisse : ${withingsData.fat_ratio}% (Withings)` : ''}
+${withingsData?.fat_ratio_pct ? `- Taux de graisse : ${withingsData.fat_ratio_pct}% (Withings)` : ''}
 ${withingsData?.muscle_mass_kg ? `- Masse musculaire : ${withingsData.muscle_mass_kg} kg (Withings)` : ''}
 ${withingsData?.bone_mass_kg ? `- Masse osseuse : ${withingsData.bone_mass_kg} kg (Withings)` : ''}
+${withingsData?.fat_mass_kg ? `- Masse grasse : ${withingsData.fat_mass_kg} kg (Withings)` : ''}
+${withingsData?.hydration_kg ? `- Hydratation : ${withingsData.hydration_kg} kg (Withings)` : ''}
+${withingsData?.fat_free_mass_kg ? `- Masse maigre : ${withingsData.fat_free_mass_kg} kg (Withings)` : ''}
+
+${withingsHistory && withingsHistory.length > 0 ? `## HISTORIQUE COMPOSITION CORPORELLE (Withings, 6 derniers mois)
+${JSON.stringify(withingsHistory, null, 0)}
+Analyse l'évolution du poids et de la composition corporelle pour adapter le plan.` : ''}
 
 ## HISTORIQUE SPORTIF
 - Première activité enregistrée : ${firstActivity ? firstActivity.activity_date : 'aucune'}
