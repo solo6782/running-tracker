@@ -40,6 +40,11 @@
 	let coachingVolume = '';
 	let coachingError = '';
 
+	// Analysis
+	let analyzing = false;
+	let analysisData = null;
+	let analysisError = '';
+
 	// Withings
 	let withingsConnected = false;
 	let withingsLatest = {};
@@ -137,6 +142,11 @@
 		objectiveTime = p.objective_time || '';
 		availability = p.availability || {};
 		programCreated = true;
+
+		// Load saved AI analysis
+		if (availability._ai_analysis) {
+			analysisData = availability._ai_analysis;
+		}
 	}
 
 	function loadProfile(p) {
@@ -325,6 +335,23 @@
 			}
 		} catch (err) { coachingError = err.message; }
 		finally { generating = false; }
+	}
+
+	async function generateAnalysis() {
+		if (!programmeId) return;
+		analyzing = true; analysisError = '';
+		try {
+			const res = await fetch('/api/coaching/analysis', {
+				method: 'POST', headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ programmeId })
+			});
+			const data = await res.json();
+			if (data.error) { analysisError = data.error; }
+			else if (data.success) {
+				analysisData = data;
+			}
+		} catch (err) { analysisError = err.message; }
+		finally { analyzing = false; }
 	}
 
 	// === HELPERS ===
@@ -660,6 +687,51 @@
 	</div>
 {/if}
 
+<!-- AI Analysis Card -->
+<div class="analysis-card">
+	{#if analysisData}
+		<div class="an-header">
+			<div class="an-title">
+				<span>🧠</span>
+				<strong>Analyse du coach IA</strong>
+				<span class="an-badge" class:red={analysisData.readiness_score < 30} class:orange={analysisData.readiness_score >= 30 && analysisData.readiness_score < 50} class:yellow={analysisData.readiness_score >= 50 && analysisData.readiness_score < 70} class:green={analysisData.readiness_score >= 70 && analysisData.readiness_score < 90} class:purple={analysisData.readiness_score >= 90}>
+					{analysisData.readiness_label}
+				</span>
+			</div>
+			<div class="an-meta">
+				{#if analysisData.readiness_score}
+					<span class="an-score">{analysisData.readiness_score}/100</span>
+				{/if}
+				{#if analysisData.estimated_time}
+					<span class="an-time">⏱️ {analysisData.estimated_time}</span>
+				{/if}
+				{#if analysisData.generated_at}
+					<span class="an-date">{new Date(analysisData.generated_at).toLocaleDateString('fr-FR')}</span>
+				{/if}
+			</div>
+		</div>
+		<div class="an-body">
+			{#each analysisData.analysis.split('\n\n') as paragraph}
+				{#if paragraph.trim()}
+					<p>{paragraph.trim()}</p>
+				{/if}
+			{/each}
+		</div>
+		<button class="an-refresh" on:click={generateAnalysis} disabled={analyzing}>
+			{#if analyzing}<span class="spinner-sm"></span>{:else}🔄{/if} Actualiser l'analyse
+		</button>
+	{:else}
+		<button class="btn-analysis" on:click={generateAnalysis} disabled={analyzing}>
+			{#if analyzing}
+				<span class="spinner"></span> Analyse en cours...
+			{:else}
+				🧠 Analyser mes chances
+			{/if}
+		</button>
+		{#if analysisError}<div class="coaching-error">{analysisError}</div>{/if}
+	{/if}
+</div>
+
 <!-- VERTICAL CALENDAR -->
 <div class="v-calendar">
 	{#each calendarDays as day, i}
@@ -921,4 +993,29 @@
 	.btn-sync-sm { background: none; border: none; font-size: 0.7rem; padding: 2px; cursor: pointer; opacity: 0.6; }
 	.btn-sync-sm:hover { opacity: 1; }
 	.btn-sync-sm:disabled { opacity: 0.3; cursor: not-allowed; }
+
+	/* Analysis Card */
+	.analysis-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; }
+	.an-header { margin-bottom: 16px; }
+	.an-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+	.an-title strong { font-size: 1rem; }
+	.an-badge { font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+	.an-badge.red { background: rgba(239,68,68,0.15); color: #ef4444; }
+	.an-badge.orange { background: rgba(249,115,22,0.15); color: #f97316; }
+	.an-badge.yellow { background: rgba(234,179,8,0.15); color: #eab308; }
+	.an-badge.green { background: rgba(34,197,94,0.15); color: #22c55e; }
+	.an-badge.purple { background: rgba(168,85,247,0.15); color: #a855f7; }
+	.an-meta { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+	.an-score { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 800; color: var(--accent); }
+	.an-time { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); background: var(--bg-input); padding: 3px 10px; border-radius: 12px; }
+	.an-date { font-size: 0.7rem; color: var(--text-muted); }
+	.an-body { line-height: 1.65; color: var(--text-secondary); font-size: 0.88rem; }
+	.an-body p { margin-bottom: 12px; }
+	.an-body p:last-child { margin-bottom: 0; }
+	.an-refresh { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.75rem; color: var(--text-muted); padding: 5px 12px; cursor: pointer; margin-top: 12px; display: inline-flex; align-items: center; gap: 4px; }
+	.an-refresh:hover { border-color: var(--accent); color: var(--text-primary); }
+	.an-refresh:disabled { opacity: 0.4; cursor: not-allowed; }
+	.btn-analysis { background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: var(--radius-md); color: white; font-size: 0.9rem; font-weight: 600; padding: 12px 24px; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+	.btn-analysis:hover { opacity: 0.9; }
+	.btn-analysis:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
