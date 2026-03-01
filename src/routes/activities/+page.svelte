@@ -50,23 +50,6 @@
 		return data.filters.sortDir === 'asc' ? ' ↑' : ' ↓';
 	}
 
-	// Inline RPE/feeling save
-	async function saveRpe(activityId, value) {
-		await fetch(`/api/activities/${activityId}`, {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ perceived_difficulty: value })
-		});
-	}
-
-	async function saveFeeling(activityId, value) {
-		await fetch(`/api/activities/${activityId}`, {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ perceived_feeling: value })
-		});
-	}
-
 	// RPE color scale
 	function rpeColor(val) {
 		if (!val) return 'var(--text-muted)';
@@ -163,56 +146,35 @@
 		</div>
 
 		{#each data.activities as activity (activity.id)}
-			<div class="activity-row">
-				<a href="/activities/{activity.id}" class="row-link">
-					<div class="col col-date">
-						<span class="date-text">{formatDate(activity.activity_date)}</span>
-					</div>
-					<div class="col col-name">
-						<span class="sport-badge" style="background: {getSportColor(activity.sport_type)}20; color: {getSportColor(activity.sport_type)}">
-							{getSportIcon(activity.sport_type)} {activity.sport_type}
-						</span>
-						<span class="activity-name">{activity.name || '—'}</span>
-					</div>
-					<div class="col col-dist mono">{formatDistance(activity.distance_m)}</div>
-					<div class="col col-time mono">{formatDuration(activity.moving_time_s)}</div>
-					<div class="col col-pace mono">{formatSpeedForSport(activity.avg_speed_ms, activity.sport_type)}</div>
-					<div class="col col-hr mono">{formatHR(activity.avg_hr)}</div>
-				</a>
-
-				<!-- RPE inline (click to set, no navigation) -->
-				<div class="col col-rpe" on:click|stopPropagation>
-					<div class="rpe-selector">
-						{#each [1,2,3,4,5,6,7,8,9,10] as val}
-							<button
-								class="rpe-dot"
-								class:active={activity.perceived_difficulty === val}
-								style="--rpe-color: {rpeColor(val)}"
-								on:click={() => { activity.perceived_difficulty = val; saveRpe(activity.id, val); }}
-								title="RPE {val}"
-							>
-								{val}
-							</button>
-						{/each}
-					</div>
+			<a href="/activities/{activity.id}" class="activity-row">
+				<div class="col col-date">
+					<span class="date-text">{formatDate(activity.activity_date)}</span>
 				</div>
-
-				<!-- Feeling inline -->
-				<div class="col col-feel" on:click|stopPropagation>
-					<div class="feeling-selector">
-						{#each [1,2,3,4,5,6,7] as val}
-							<button
-								class="feeling-btn"
-								class:active={activity.perceived_feeling === val}
-								on:click={() => { activity.perceived_feeling = val; saveFeeling(activity.id, val); }}
-								title="Feeling {val}/7"
-							>
-								{getFeelingEmoji(val)}
-							</button>
-						{/each}
-					</div>
+				<div class="col col-name">
+					<span class="sport-badge" style="background: {getSportColor(activity.sport_type)}20; color: {getSportColor(activity.sport_type)}">
+						{getSportIcon(activity.sport_type)} {activity.sport_type}
+					</span>
+					<span class="activity-name">{activity.name || '—'}</span>
 				</div>
-			</div>
+				<div class="col col-dist mono">{formatDistance(activity.distance_m)}</div>
+				<div class="col col-time mono">{formatDuration(activity.moving_time_s)}</div>
+				<div class="col col-pace mono">{formatSpeedForSport(activity.avg_speed_ms, activity.sport_type)}</div>
+				<div class="col col-hr mono">{formatHR(activity.avg_hr)}</div>
+				<div class="col col-rpe">
+					{#if activity.perceived_difficulty}
+						<span class="rpe-badge" style="background: {rpeColor(activity.perceived_difficulty)}20; color: {rpeColor(activity.perceived_difficulty)}">{activity.perceived_difficulty}</span>
+					{:else}
+						<span class="val-empty">—</span>
+					{/if}
+				</div>
+				<div class="col col-feel">
+					{#if activity.perceived_feeling}
+						<span class="feel-badge">{getFeelingEmoji(activity.perceived_feeling)}</span>
+					{:else}
+						<span class="val-empty">—</span>
+					{/if}
+				</div>
+			</a>
 		{:else}
 			<div class="empty-state">
 				<p>Aucune activité trouvée</p>
@@ -382,7 +344,6 @@
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		background: var(--bg-card);
-		overflow-x: auto;
 	}
 
 	.list-header {
@@ -391,7 +352,6 @@
 		background: var(--bg-secondary);
 		border-bottom: 1px solid var(--border);
 		gap: 4px;
-		min-width: 860px;
 	}
 	.list-header .col {
 		font-size: 0.72rem;
@@ -413,32 +373,23 @@
 		align-items: center;
 		border-bottom: 1px solid var(--border);
 		transition: background 0.1s;
-		min-width: 860px;
-	}
-	.activity-row:last-child { border-bottom: none; }
-	.activity-row:hover { background: var(--bg-card-hover); }
-
-	.row-link {
-		display: flex;
-		align-items: center;
-		flex: 1;
 		padding: 12px 16px;
 		text-decoration: none;
 		color: inherit;
 		gap: 4px;
-		min-width: 0;
 	}
-	.row-link:hover { text-decoration: none; }
+	.activity-row:last-child { border-bottom: none; }
+	.activity-row:hover { background: var(--bg-card-hover); text-decoration: none; }
 
 	.col { flex-shrink: 0; }
-	.col-date { width: 90px; }
-	.col-name { flex: 1; max-width: 200px; min-width: 100px; display: flex; flex-direction: column; gap: 3px; }
-	.col-dist { width: 65px; text-align: right; }
-	.col-time { width: 55px; text-align: right; }
-	.col-pace { width: 65px; text-align: right; }
-	.col-hr { width: 52px; text-align: right; }
-	.col-rpe { width: 180px; padding: 0 4px; }
-	.col-feel { width: 105px; padding: 0 4px; }
+	.col-date { width: 110px; }
+	.col-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+	.col-dist { width: 72px; text-align: right; }
+	.col-time { width: 60px; text-align: right; }
+	.col-pace { width: 72px; text-align: right; }
+	.col-hr { width: 58px; text-align: right; }
+	.col-rpe { width: 40px; text-align: center; }
+	.col-feel { width: 40px; text-align: center; }
 
 	.date-text {
 		font-size: 0.8rem;
@@ -470,66 +421,24 @@
 		font-size: 0.8rem;
 	}
 
-	/* RPE selector */
-	.rpe-selector {
-		display: flex;
-		gap: 1px;
-	}
-	.rpe-dot {
-		width: 16px;
-		height: 16px;
-		border-radius: 50%;
-		border: 1.5px solid var(--border);
-		background: transparent;
-		color: var(--text-muted);
-		font-size: 0.5rem;
+	/* RPE badge */
+	.rpe-badge {
 		font-family: var(--font-mono);
-		font-weight: 600;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0;
-		transition: all 0.15s;
-		cursor: pointer;
-	}
-	.rpe-dot:hover {
-		border-color: var(--rpe-color);
-		color: var(--rpe-color);
-		transform: scale(1.15);
-	}
-	.rpe-dot.active {
-		background: var(--rpe-color);
-		border-color: var(--rpe-color);
-		color: white;
-		transform: scale(1.1);
+		font-size: 0.78rem;
+		font-weight: 700;
+		padding: 2px 6px;
+		border-radius: 4px;
 	}
 
-	/* Feeling selector */
-	.feeling-selector {
-		display: flex;
-		gap: 0px;
+	/* Feeling badge */
+	.feel-badge {
+		font-size: 1rem;
 	}
-	.feeling-btn {
-		background: none;
-		border: none;
+
+	.val-empty {
+		color: var(--text-muted);
 		font-size: 0.8rem;
-		padding: 1px;
-		opacity: 0.35;
-		transition: all 0.15s;
-		cursor: pointer;
-		filter: grayscale(100%);
 	}
-	.feeling-btn:hover {
-		opacity: 0.8;
-		transform: scale(1.2);
-		filter: grayscale(0%);
-	}
-	.feeling-btn.active {
-		opacity: 1;
-		transform: scale(1.15);
-		filter: grayscale(0%);
-	}
-
 	/* Pagination */
 	.pagination {
 		display: flex;
