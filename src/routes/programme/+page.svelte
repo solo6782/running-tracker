@@ -72,8 +72,15 @@
 			if (progData.programme) loadProgramme(progData.programme);
 			if (profData.profile) loadProfile(profData.profile);
 
-			// Check Withings connection
-			fetchWithings();
+			// Check Withings connection (auto-sync once per day)
+			const today = new Date().toISOString().split('T')[0];
+			const lastSync = localStorage.getItem('withings_last_sync');
+			const needsSync = lastSync !== today;
+			fetchWithings(needsSync).then(() => {
+				if (needsSync && withingsConnected) {
+					localStorage.setItem('withings_last_sync', today);
+				}
+			});
 
 			// Check URL params for Withings redirect result
 			const params = new URLSearchParams(window.location.search);
@@ -112,6 +119,9 @@
 
 	async function syncWithings() {
 		await fetchWithings(true);
+		if (withingsConnected) {
+			localStorage.setItem('withings_last_sync', new Date().toISOString().split('T')[0]);
+		}
 	}
 
 	function loadProgramme(p) {
