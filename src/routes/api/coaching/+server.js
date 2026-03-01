@@ -1,0 +1,295 @@
+import { json } from '@sveltejs/kit';
+import { createServerClient } from '$lib/supabase.js';
+import { getEnv } from '$lib/env.js';
+
+export async function POST({ request, platform }) {
+	const env = getEnv(platform);
+	const anthropicKey = env.ANTHROPIC_API_KEY;
+	if (!anthropicKey) {
+		return json({ error: 'Clé API Anthropic non configurée' }, { status: 500 });
+	}
+
+	const supabase = createServerClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+	const { programmeId } = await request.json();
+
+	// 1. Load programme
+	const { data: programme } = await supabase
+		.from('rt_programmes')
+		.select('*')
+		.eq('id', programmeId)
+		.single();
+
+	if (!programme) {
+		return json({ error: 'Programme non trouvé' }, { status: 404 });
+	}
+
+	// 2. Load athlete profile
+	const { data: profile } = await supabase
+		.from('rt_athlete_profile')
+		.select('*')
+		.limit(1)
+		.single();
+
+	// 2b. Load Withings body composition if available
+	let withingsData = null;
+	const { data: withingsTokens } = await supabase
+		.from('rt_withings_tokens')
+		.select('*')
+		.limit(1)
+		.single();
+	
+	if (withingsTokens) {
+		try {
+			// Dynamically import to avoid issues if not configured
+			const { getMeasures, refreshTokens, parseMeasureValue, MEASURE_TYPES } = await import('$lib/withings.js');
+			
+			let accessToken = withingsTokens.access_token;
+			if (new Date(withingsTokens.expires_at) < new Date()) {
+				const newTokens = await refreshTokens(withingsTokens.refresh_token, env.WITHINGS_CLIENT_ID, env.WITHINGS_CLIENT_SECRET);
+				accessToken = newTokens.access_token;
+				await supabase.from('rt_withings_tokens').update({
+					access_token: newTokens.access_token,
+					refresh_token: newTokens.refresh_token,
+					expires_at: new Date(Date.now() + newTokens.expires_in * 1000).toISOString()
+				}).eq('id', withingsTokens.id);
+			}
+			
+			const threeMonthsAgo = Math.floor((Date.now() - 90 * 24 * 3600 * 1000) / 1000);
+			const body = await getMeasures(accessToken, { startdate: threeMonthsAgo });
+			
+			// Parse latest values
+			const latestValues = {};
+			const typeNames = { 1: 'weight_kg', 6: 'fat_ratio', 76: 'muscle_mass_kg', 88: 'bone_mass_kg' };
+			for (const grp of (body.measuregrps || []).slice(0, 20)) {
+				for (const m of grp.measures || []) {
+					const name = typeNames[m.type];
+					if (name && !latestValues[name]) {
+						latestValues[name] = Math.round(parseMeasureValue(m) * 100) / 100;
+					}
+				}
+			}
+			withingsData = latestValues;
+		} catch (e) {
+			console.error('Withings coaching fetch error:', e);
+		}
+	}
+
+	// 3. Load training history (last 6 months of activities)
+	const sixMonthsAgo = new Date();
+	sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+	const { data: recentActivities } = await supabase
+		.from('rt_activities')
+		.select('sport_type, name, activity_date, distance_m, moving_time_s, avg_speed_ms, avg_hr, max_hr, elevation_gain, perceived_difficulty, perceived_feeling')
+		.gte('activity_date', sixMonthsAgo.toISOString())
+		.order('activity_date', { ascending: false });
+
+	// 4. Load ALL activities for global stats (first activity date, totals)
+	const { data: allActivities } = await supabase
+		.from('rt_activities')
+		.select('sport_type, activity_date, distance_m, moving_time_s, avg_hr, elevation_gain, perceived_difficulty, perceived_feeling')
+		.order('activity_date', { ascending: true });
+
+	// 5. Compute summary stats
+	const firstActivity = allActivities?.[0];
+	const totalActivities = allActivities?.length || 0;
+
+	const runActivities = (recentActivities || []).filter(a => a.sport_type === 'Run');
+	const rideActivities = (recentActivities || []).filter(a => ['Ride', 'VirtualRide'].includes(a.sport_type));
+
+	const avgWeeklyRuns = runActivities.length > 0 ? (runActivities.length / 26).toFixed(1) : 0;
+	const avgWeeklyRides = rideActivities.length > 0 ? (rideActivities.length / 26).toFixed(1) : 0;
+
+	const avgRunDist = runActivities.length > 0
+		? (runActivities.reduce((s, a) => s + (a.distance_m || 0), 0) / runActivities.length / 1000).toFixed(1)
+		: 0;
+
+	const avgRunPace = runActivities.length > 0
+		? (() => {
+			const totalTime = runActivities.reduce((s, a) => s + (a.moving_time_s || 0), 0);
+			const totalDist = runActivities.reduce((s, a) => s + (a.distance_m || 0), 0);
+			if (totalDist === 0) return 'N/A';
+			const paceS = totalTime / (totalDist / 1000);
+			return `${Math.floor(paceS / 60)}:${String(Math.round(paceS % 60)).padStart(2, '0')}/km`;
+		})()
+		: 'N/A';
+
+	const avgRPE = recentActivities?.length > 0
+		? (recentActivities.filter(a => a.perceived_difficulty).reduce((s, a) => s + a.perceived_difficulty, 0) /
+			recentActivities.filter(a => a.perceived_difficulty).length || 0).toFixed(1)
+		: 'N/A';
+
+	const avgFeeling = recentActivities?.length > 0
+		? (recentActivities.filter(a => a.perceived_feeling).reduce((s, a) => s + a.perceived_feeling, 0) /
+			recentActivities.filter(a => a.perceived_feeling).length || 0).toFixed(1)
+		: 'N/A';
+
+	// Recent 4 weeks detail
+	const fourWeeksAgo = new Date();
+	fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+	const last4Weeks = (recentActivities || []).filter(a => new Date(a.activity_date) >= fourWeeksAgo);
+
+	const last4WeeksSummary = last4Weeks.map(a => ({
+		date: a.activity_date,
+		sport: a.sport_type,
+		dist_km: a.distance_m ? (a.distance_m / 1000).toFixed(1) : 0,
+		duration_min: a.moving_time_s ? Math.round(a.moving_time_s / 60) : 0,
+		avg_hr: a.avg_hr || null,
+		rpe: a.perceived_difficulty || null,
+		feeling: a.perceived_feeling || null
+	}));
+
+	// 6. Build availability summary
+	const avail = programme.availability || {};
+	const trainingDays = Object.entries(avail)
+		.filter(([date, v]) => new Date(date) >= new Date())
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([date, v]) => ({
+			date,
+			run: v.run || false,
+			ride: v.ride || false
+		}));
+
+	// 7. Compute age
+	let age = null;
+	if (profile?.date_of_birth) {
+		const dob = new Date(profile.date_of_birth);
+		const today = new Date();
+		age = today.getFullYear() - dob.getFullYear();
+		if (today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) {
+			age--;
+		}
+	}
+
+	// 8. Build the prompt
+	const prompt = `Tu es un coach de course à pied expert. Tu dois générer un plan d'entraînement personnalisé.
+
+## PROFIL ATHLÈTE
+${age ? `- Âge : ${age} ans` : '- Âge : non renseigné'}
+${profile?.weight_kg ? `- Poids : ${profile.weight_kg} kg` : withingsData?.weight_kg ? `- Poids : ${withingsData.weight_kg} kg (Withings)` : '- Poids : non renseigné'}
+${profile?.height_cm ? `- Taille : ${profile.height_cm} cm` : ''}
+${profile?.resting_hr ? `- FC repos : ${profile.resting_hr} bpm` : ''}
+${profile?.max_hr ? `- FC max : ${profile.max_hr} bpm` : ''}
+${profile?.notes ? `- Notes : ${profile.notes}` : ''}
+${withingsData?.fat_ratio ? `- Taux de graisse : ${withingsData.fat_ratio}% (Withings)` : ''}
+${withingsData?.muscle_mass_kg ? `- Masse musculaire : ${withingsData.muscle_mass_kg} kg (Withings)` : ''}
+${withingsData?.bone_mass_kg ? `- Masse osseuse : ${withingsData.bone_mass_kg} kg (Withings)` : ''}
+
+## HISTORIQUE SPORTIF
+- Première activité enregistrée : ${firstActivity ? firstActivity.activity_date : 'aucune'}
+- IMPORTANT : L'athlète a réellement débuté le sport au moment de sa première activité enregistrée. Avant, il ne faisait pas de sport.
+- Total activités : ${totalActivities}
+- Derniers 6 mois — courses : ${runActivities.length} (moy. ${avgWeeklyRuns}/sem, dist. moy. ${avgRunDist}km, allure moy. ${avgRunPace})
+- Derniers 6 mois — vélo : ${rideActivities.length} (moy. ${avgWeeklyRides}/sem)
+- RPE moyen récent : ${avgRPE}/10
+- Ressenti moyen récent : ${avgFeeling}/7
+
+## 4 DERNIÈRES SEMAINES (détail)
+${JSON.stringify(last4WeeksSummary, null, 0)}
+
+## OBJECTIF COURSE
+- Course : ${programme.race_name}
+- Date : ${programme.race_date}
+- Distance : ${programme.race_distance_km} km
+${programme.race_elevation_gain ? `- Dénivelé : D+${programme.race_elevation_gain}m` : ''}
+${programme.race_profile ? `- Profil : ${programme.race_profile}` : ''}
+- Objectif : ${programme.objective_type === 'time' ? `Temps cible ${programme.objective_time}` : 'Finir la course'}
+
+## DISPONIBILITÉS
+Jours disponibles (run = course possible, ride = vélo possible) :
+${trainingDays.map(d => `${d.date}: ${d.run && d.ride ? 'run ou vélo' : d.run ? 'run uniquement' : d.ride ? 'vélo uniquement' : 'REPOS'}`).join('\n')}
+
+## INSTRUCTIONS
+Génère un plan d'entraînement pour CHAQUE jour disponible (pas les jours de repos ni les jours passés).
+Le plan doit être progressif, inclure de la variété (endurance fondamentale, seuil, fractionné, sortie longue, récupération, vélo cross-training).
+Respecte les principes : pas plus de 3 séances intenses par semaine, sortie longue le week-end, repos avant la course.
+Adapte l'intensité au niveau de l'athlète (débutant, intermédiaire, confirmé) basé sur son historique.
+
+Retourne UNIQUEMENT un JSON valide (sans markdown, sans backticks) avec cette structure :
+{
+  "level": "débutant" | "intermédiaire" | "confirmé",
+  "weekly_volume_target": "ex: 25-35 km/semaine",
+  "summary": "résumé du plan en 2-3 phrases",
+  "plan": {
+    "YYYY-MM-DD": {
+      "sport": "run" | "ride" | "rest",
+      "type": "easy" | "tempo" | "intervals" | "long" | "recovery" | "cross" | "rest",
+      "title": "titre court en français",
+      "duration_min": nombre,
+      "distance_km": nombre ou null,
+      "description": "description détaillée de la séance en français (allure, zones, etc.)",
+      "intensity": "low" | "moderate" | "high"
+    }
+  }
+}
+
+Retourne UNIQUEMENT le JSON.`;
+
+	try {
+		const response = await fetch('https://api.anthropic.com/v1/messages', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'x-api-key': anthropicKey,
+				'anthropic-version': '2023-06-01'
+			},
+			body: JSON.stringify({
+				model: 'claude-sonnet-4-20250514',
+				max_tokens: 8000,
+				messages: [{ role: 'user', content: prompt }]
+			})
+		});
+
+		if (!response.ok) {
+			const err = await response.text();
+			console.error('Anthropic error:', err);
+			return json({ error: 'Erreur API Anthropic' }, { status: 502 });
+		}
+
+		const data = await response.json();
+		const textContent = data.content
+			.filter(b => b.type === 'text')
+			.map(b => b.text)
+			.join('');
+
+		const cleaned = textContent.replace(/```json|```/g, '').trim();
+		let coachingResult;
+
+		try {
+			coachingResult = JSON.parse(cleaned);
+		} catch (e) {
+			console.error('Parse error:', cleaned.substring(0, 500));
+			return json({ error: 'Erreur de parsing du plan' }, { status: 500 });
+		}
+
+		// 9. Merge plan into availability
+		const updatedAvailability = { ...avail };
+		for (const [date, plan] of Object.entries(coachingResult.plan || {})) {
+			if (updatedAvailability[date]) {
+				updatedAvailability[date].plan = plan;
+			} else {
+				updatedAvailability[date] = { run: true, ride: true, plan };
+			}
+		}
+
+		// 10. Save to Supabase
+		await supabase
+			.from('rt_programmes')
+			.update({
+				availability: updatedAvailability,
+				updated_at: new Date().toISOString()
+			})
+			.eq('id', programmeId);
+
+		return json({
+			success: true,
+			level: coachingResult.level,
+			weekly_volume_target: coachingResult.weekly_volume_target,
+			summary: coachingResult.summary,
+			availability: updatedAvailability
+		});
+	} catch (err) {
+		console.error('Coaching error:', err);
+		return json({ error: `Erreur: ${err.message}` }, { status: 500 });
+	}
+}
