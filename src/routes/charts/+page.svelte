@@ -380,10 +380,7 @@
 
 <div class="page">
 	<header class="page-header">
-		<div class="header-top">
-			<a href="/dashboard" class="back-link">← Dashboard</a>
-			<h1>📊 Graphiques</h1>
-		</div>
+		<h1>📊 Graphiques</h1>
 
 		<!-- Sport filter -->
 		<div class="filter-row">
@@ -479,19 +476,7 @@
 	}
 
 	.page-header { margin-bottom: 24px; }
-	.header-top {
-		display: flex;
-		align-items: baseline;
-		gap: 16px;
-		margin-bottom: 12px;
-	}
-	.back-link {
-		color: var(--text-secondary);
-		font-size: 0.85rem;
-		text-decoration: none;
-	}
-	.back-link:hover { color: var(--accent-light); }
-	h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+	h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 12px; }
 
 	.filter-row { display: flex; gap: 8px; }
 	.select {

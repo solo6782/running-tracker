@@ -68,7 +68,6 @@
 <div class="page">
 	<header class="page-header">
 		<div class="header-top">
-			<a href="/dashboard" class="back-link">← Dashboard</a>
 			<h1>Activités</h1>
 			<span class="count">{data.total} activités</span>
 		</div>
@@ -141,6 +140,9 @@
 			<button class="col col-hr" on:click={() => onSort('avg_hr')}>
 				FC{sortIndicator('avg_hr')}
 			</button>
+			<button class="col col-elev" on:click={() => onSort('elevation_gain')}>
+				D+{sortIndicator('elevation_gain')}
+			</button>
 			<div class="col col-rpe">RPE</div>
 			<div class="col col-feel">Ressenti</div>
 		</div>
@@ -160,6 +162,7 @@
 				<div class="col col-time mono">{formatDuration(activity.moving_time_s)}</div>
 				<div class="col col-pace mono">{formatSpeedForSport(activity.avg_speed_ms, activity.sport_type)}</div>
 				<div class="col col-hr mono">{formatHR(activity.avg_hr)}</div>
+				<div class="col col-elev mono">{activity.elevation_gain ? Math.round(activity.elevation_gain) + 'm' : '—'}</div>
 				<div class="col col-rpe">
 					{#if activity.perceived_difficulty}
 						<span class="rpe-badge" style="background: {rpeColor(activity.perceived_difficulty)}20; color: {rpeColor(activity.perceived_difficulty)}">{activity.perceived_difficulty}</span>
@@ -216,13 +219,6 @@
 		margin-bottom: 16px;
 		flex-wrap: wrap;
 	}
-
-	.back-link {
-		color: var(--text-secondary);
-		font-size: 0.85rem;
-		text-decoration: none;
-	}
-	.back-link:hover { color: var(--accent-light); text-decoration: none; }
 
 	h1 {
 		font-size: 1.5rem;
@@ -388,6 +384,7 @@
 	.col-time { width: 60px; text-align: right; }
 	.col-pace { width: 72px; text-align: right; }
 	.col-hr { width: 58px; text-align: right; }
+	.col-elev { width: 50px; text-align: right; }
 	.col-rpe { width: 40px; text-align: center; }
 	.col-feel { width: 40px; text-align: center; }
 

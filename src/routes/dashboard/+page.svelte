@@ -33,13 +33,7 @@
 
 <div class="page">
 	<header class="page-header">
-		<div class="header-top">
-			<h1>🏃 Dashboard</h1>
-			<nav class="nav-links">
-				<a href="/charts">Graphiques</a>
-				<a href="/activities">Activités</a>
-			</nav>
-		</div>
+		<h1>📊 Dashboard</h1>
 	</header>
 
 	{#if data.error}
@@ -308,19 +302,7 @@
 	}
 
 	.page-header { margin-bottom: 28px; }
-	.header-top {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-	}
 	h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
-	.nav-links { display: flex; gap: 16px; }
-	.nav-links a {
-		color: var(--text-secondary);
-		font-size: 0.85rem;
-		text-decoration: none;
-	}
-	.nav-links a:hover { color: var(--accent-light); }
 
 	.error-banner {
 		background: rgba(255, 107, 107, 0.1);

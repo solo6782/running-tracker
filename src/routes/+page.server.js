@@ -1,3 +1,4 @@
+import { redirect } from '@sveltejs/kit';
 import { createServerClient } from '$lib/supabase.js';
 import { getEnv } from '$lib/env.js';
 import { getStravaAuthUrl } from '$lib/strava.js';
@@ -37,9 +38,6 @@ export async function load({ platform }) {
 		const user = users?.[0] || null;
 		const isConnected = !!user?.strava_athlete_id;
 
-		const redirectUri = `${env.APP_URL}/auth/strava/callback`;
-		const stravaAuthUrl = getStravaAuthUrl(env.STRAVA_CLIENT_ID, redirectUri);
-
 		// Compter les activités
 		let activityCount = 0;
 		if (isConnected) {
@@ -49,6 +47,14 @@ export async function load({ platform }) {
 			activityCount = count || 0;
 		}
 
+		// Redirect to dashboard if activities exist
+		if (activityCount > 0) {
+			throw redirect(302, '/dashboard');
+		}
+
+		const redirectUri = `${env.APP_URL}/auth/strava/callback`;
+		const stravaAuthUrl = getStravaAuthUrl(env.STRAVA_CLIENT_ID, redirectUri);
+
 		return {
 			isConnected,
 			stravaAuthUrl,
@@ -57,6 +63,7 @@ export async function load({ platform }) {
 			error: null
 		};
 	} catch (err) {
+		if (err.status === 302) throw err;
 		return {
 			isConnected: false,
 			stravaAuthUrl: '#',
