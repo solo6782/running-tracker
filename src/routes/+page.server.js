@@ -11,6 +11,7 @@ export async function load({ platform }) {
 			isConnected: false,
 			stravaAuthUrl: '#',
 			athleteId: null,
+			activityCount: 0,
 			error: 'Configuration Supabase manquante. Vérifiez les variables d\'environnement.'
 		};
 	}
@@ -28,6 +29,7 @@ export async function load({ platform }) {
 				isConnected: false,
 				stravaAuthUrl: '#',
 				athleteId: null,
+				activityCount: 0,
 				error: `Erreur DB: ${dbError.message}`
 			};
 		}
@@ -38,10 +40,20 @@ export async function load({ platform }) {
 		const redirectUri = `${env.APP_URL}/auth/strava/callback`;
 		const stravaAuthUrl = getStravaAuthUrl(env.STRAVA_CLIENT_ID, redirectUri);
 
+		// Compter les activités
+		let activityCount = 0;
+		if (isConnected) {
+			const { count } = await supabaseAdmin
+				.from('rt_activities')
+				.select('id', { count: 'exact', head: true });
+			activityCount = count || 0;
+		}
+
 		return {
 			isConnected,
 			stravaAuthUrl,
 			athleteId: user?.strava_athlete_id || null,
+			activityCount,
 			error: null
 		};
 	} catch (err) {
@@ -49,6 +61,7 @@ export async function load({ platform }) {
 			isConnected: false,
 			stravaAuthUrl: '#',
 			athleteId: null,
+			activityCount: 0,
 			error: `Erreur: ${err.message}`
 		};
 	}

@@ -58,7 +58,13 @@
 				Strava connecté (Athlete #{data.athleteId})
 			</div>
 
-			{#if !importCount}
+			{#if data.activityCount > 0}
+				<a href="/activities" class="btn btn-primary">
+					🏃 Voir mes activités ({data.activityCount})
+				</a>
+			{/if}
+
+			{#if !importCount && !data.activityCount}
 				<button class="btn btn-primary" on:click={startImport} disabled={importing}>
 					{#if importing}
 						<span class="spinner"></span>

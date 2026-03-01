@@ -1,0 +1,605 @@
+<script>
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { formatDistance, formatDuration, formatSpeedForSport, formatHR, formatDate, getSportColor, getSportIcon, getFeelingEmoji } from '$lib/format.js';
+
+	export let data;
+
+	let filtersOpen = false;
+	let searchInput = data.filters.search || '';
+	let searchTimeout;
+
+	function updateUrl(params) {
+		const url = new URL($page.url);
+		for (const [key, val] of Object.entries(params)) {
+			if (val && val !== 'all' && val !== '') {
+				url.searchParams.set(key, val);
+			} else {
+				url.searchParams.delete(key);
+			}
+		}
+		// Reset to page 1 when changing filters
+		if (!params.page) url.searchParams.delete('page');
+		goto(url.toString(), { keepFocus: true });
+	}
+
+	function onSearch() {
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			updateUrl({ q: searchInput });
+		}, 300);
+	}
+
+	function onSportFilter(e) {
+		updateUrl({ sport: e.target.value });
+	}
+
+	function onSort(field) {
+		const currentSort = data.filters.sortBy;
+		const currentDir = data.filters.sortDir;
+		const newDir = (currentSort === field && currentDir === 'desc') ? 'asc' : 'desc';
+		updateUrl({ sort: field, dir: newDir });
+	}
+
+	function goToPage(p) {
+		updateUrl({ page: p, sport: data.filters.sportType, from: data.filters.dateFrom, to: data.filters.dateTo, q: data.filters.search, sort: data.filters.sortBy, dir: data.filters.sortDir });
+	}
+
+	function sortIndicator(field) {
+		if (data.filters.sortBy !== field) return '';
+		return data.filters.sortDir === 'asc' ? ' ↑' : ' ↓';
+	}
+
+	// Inline RPE/feeling save
+	async function saveRpe(activityId, value) {
+		await fetch(`/api/activities/${activityId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ perceived_difficulty: value })
+		});
+	}
+
+	async function saveFeeling(activityId, value) {
+		await fetch(`/api/activities/${activityId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ perceived_feeling: value })
+		});
+	}
+
+	// RPE color scale
+	function rpeColor(val) {
+		if (!val) return 'var(--text-muted)';
+		if (val <= 3) return 'var(--success)';
+		if (val <= 5) return '#4ecdc4';
+		if (val <= 7) return 'var(--warning)';
+		if (val <= 8) return '#ff8c42';
+		return 'var(--danger)';
+	}
+</script>
+
+<svelte:head>
+	<title>Activités — Running Tracker</title>
+</svelte:head>
+
+<div class="page">
+	<header class="page-header">
+		<div class="header-top">
+			<a href="/" class="back-link">← Accueil</a>
+			<h1>Activités</h1>
+			<span class="count">{data.total} activités</span>
+		</div>
+
+		<!-- Search + Filters -->
+		<div class="controls">
+			<div class="search-bar">
+				<svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+				</svg>
+				<input
+					type="text"
+					placeholder="Rechercher une activité..."
+					bind:value={searchInput}
+					on:input={onSearch}
+				/>
+			</div>
+
+			<div class="filter-row">
+				<select value={data.filters.sportType} on:change={onSportFilter} class="select">
+					<option value="all">Tous les sports ({data.total})</option>
+					{#each data.sportTypes as st}
+						<option value={st.type}>{getSportIcon(st.type)} {st.type} ({st.count})</option>
+					{/each}
+				</select>
+
+				<button class="btn-icon" on:click={() => filtersOpen = !filtersOpen} class:active={filtersOpen}>
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+					</svg>
+				</button>
+			</div>
+
+			{#if filtersOpen}
+				<div class="filters-panel">
+					<div class="filter-group">
+						<label>Du</label>
+						<input type="date" value={data.filters.dateFrom} on:change={(e) => updateUrl({ from: e.target.value })} />
+					</div>
+					<div class="filter-group">
+						<label>Au</label>
+						<input type="date" value={data.filters.dateTo} on:change={(e) => updateUrl({ to: e.target.value })} />
+					</div>
+				</div>
+			{/if}
+		</div>
+	</header>
+
+	{#if data.error}
+		<div class="error-banner">⚠️ {data.error}</div>
+	{/if}
+
+	<!-- Activities List -->
+	<div class="activities-list">
+		<!-- Table header (sortable) -->
+		<div class="list-header">
+			<button class="col col-date" on:click={() => onSort('activity_date')}>
+				Date{sortIndicator('activity_date')}
+			</button>
+			<div class="col col-name">Activité</div>
+			<button class="col col-dist" on:click={() => onSort('distance_m')}>
+				Dist.{sortIndicator('distance_m')}
+			</button>
+			<button class="col col-time" on:click={() => onSort('moving_time_s')}>
+				Durée{sortIndicator('moving_time_s')}
+			</button>
+			<button class="col col-pace" on:click={() => onSort('avg_speed_ms')}>
+				Allure{sortIndicator('avg_speed_ms')}
+			</button>
+			<button class="col col-hr" on:click={() => onSort('avg_hr')}>
+				FC{sortIndicator('avg_hr')}
+			</button>
+			<div class="col col-rpe">RPE</div>
+			<div class="col col-feel">Ressenti</div>
+		</div>
+
+		{#each data.activities as activity (activity.id)}
+			<div class="activity-row">
+				<a href="/activities/{activity.id}" class="row-link">
+					<div class="col col-date">
+						<span class="date-text">{formatDate(activity.activity_date)}</span>
+					</div>
+					<div class="col col-name">
+						<span class="sport-badge" style="background: {getSportColor(activity.sport_type)}20; color: {getSportColor(activity.sport_type)}">
+							{getSportIcon(activity.sport_type)} {activity.sport_type}
+						</span>
+						<span class="activity-name">{activity.name || '—'}</span>
+					</div>
+					<div class="col col-dist mono">{formatDistance(activity.distance_m)}</div>
+					<div class="col col-time mono">{formatDuration(activity.moving_time_s)}</div>
+					<div class="col col-pace mono">{formatSpeedForSport(activity.avg_speed_ms, activity.sport_type)}</div>
+					<div class="col col-hr mono">{formatHR(activity.avg_hr)}</div>
+				</a>
+
+				<!-- RPE inline (click to set, no navigation) -->
+				<div class="col col-rpe" on:click|stopPropagation>
+					<div class="rpe-selector">
+						{#each [1,2,3,4,5,6,7,8,9,10] as val}
+							<button
+								class="rpe-dot"
+								class:active={activity.perceived_difficulty === val}
+								style="--rpe-color: {rpeColor(val)}"
+								on:click={() => { activity.perceived_difficulty = val; saveRpe(activity.id, val); }}
+								title="RPE {val}"
+							>
+								{val}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<!-- Feeling inline -->
+				<div class="col col-feel" on:click|stopPropagation>
+					<div class="feeling-selector">
+						{#each [1,2,3,4,5,6,7] as val}
+							<button
+								class="feeling-btn"
+								class:active={activity.perceived_feeling === val}
+								on:click={() => { activity.perceived_feeling = val; saveFeeling(activity.id, val); }}
+								title="Feeling {val}/7"
+							>
+								{getFeelingEmoji(val)}
+							</button>
+						{/each}
+					</div>
+				</div>
+			</div>
+		{:else}
+			<div class="empty-state">
+				<p>Aucune activité trouvée</p>
+			</div>
+		{/each}
+	</div>
+
+	<!-- Pagination -->
+	{#if data.totalPages > 1}
+		<div class="pagination">
+			<button class="page-btn" disabled={data.page <= 1} on:click={() => goToPage(data.page - 1)}>
+				← Précédent
+			</button>
+			<span class="page-info">
+				Page {data.page} / {data.totalPages}
+			</span>
+			<button class="page-btn" disabled={data.page >= data.totalPages} on:click={() => goToPage(data.page + 1)}>
+				Suivant →
+			</button>
+		</div>
+	{/if}
+</div>
+
+<style>
+	.page {
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 24px 16px;
+	}
+
+	.page-header {
+		margin-bottom: 24px;
+	}
+
+	.header-top {
+		display: flex;
+		align-items: baseline;
+		gap: 16px;
+		margin-bottom: 16px;
+		flex-wrap: wrap;
+	}
+
+	.back-link {
+		color: var(--text-secondary);
+		font-size: 0.85rem;
+		text-decoration: none;
+	}
+	.back-link:hover { color: var(--accent-light); text-decoration: none; }
+
+	h1 {
+		font-size: 1.5rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+	}
+
+	.count {
+		color: var(--text-secondary);
+		font-size: 0.85rem;
+		font-family: var(--font-mono);
+	}
+
+	/* Controls */
+	.controls {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	.search-bar {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		padding: 0 14px;
+	}
+	.search-icon { color: var(--text-muted); flex-shrink: 0; }
+	.search-bar input {
+		flex: 1;
+		background: none;
+		border: none;
+		color: var(--text-primary);
+		font-family: var(--font-sans);
+		font-size: 0.9rem;
+		padding: 10px 0;
+		outline: none;
+	}
+	.search-bar input::placeholder { color: var(--text-muted); }
+
+	.filter-row {
+		display: flex;
+		gap: 8px;
+	}
+
+	.select {
+		flex: 1;
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		color: var(--text-primary);
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		padding: 8px 12px;
+		outline: none;
+		cursor: pointer;
+	}
+	.select option { background: var(--bg-card); }
+
+	.btn-icon {
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		padding: 8px 12px;
+		transition: all 0.15s;
+	}
+	.btn-icon:hover, .btn-icon.active {
+		border-color: var(--accent);
+		color: var(--accent-light);
+	}
+
+	.filters-panel {
+		display: flex;
+		gap: 12px;
+		padding: 12px 14px;
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+	}
+	.filter-group {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		flex: 1;
+	}
+	.filter-group label {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.filter-group input {
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		color: var(--text-primary);
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		padding: 6px 8px;
+		outline: none;
+	}
+
+	.error-banner {
+		background: rgba(255, 107, 107, 0.1);
+		border: 1px solid var(--danger);
+		border-radius: var(--radius-md);
+		padding: 12px 16px;
+		color: var(--danger);
+		font-size: 0.85rem;
+		margin-bottom: 16px;
+	}
+
+	/* List */
+	.activities-list {
+		border: 1px solid var(--border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		background: var(--bg-card);
+	}
+
+	.list-header {
+		display: flex;
+		padding: 10px 16px;
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border);
+		gap: 4px;
+	}
+	.list-header .col {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--text-muted);
+		font-weight: 600;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		font-family: var(--font-sans);
+		text-align: left;
+	}
+	.list-header .col:hover { color: var(--text-secondary); }
+
+	.activity-row {
+		display: flex;
+		align-items: center;
+		border-bottom: 1px solid var(--border);
+		transition: background 0.1s;
+	}
+	.activity-row:last-child { border-bottom: none; }
+	.activity-row:hover { background: var(--bg-card-hover); }
+
+	.row-link {
+		display: flex;
+		align-items: center;
+		flex: 1;
+		padding: 12px 16px;
+		text-decoration: none;
+		color: inherit;
+		gap: 4px;
+		min-width: 0;
+	}
+	.row-link:hover { text-decoration: none; }
+
+	.col { flex-shrink: 0; }
+	.col-date { width: 110px; }
+	.col-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+	.col-dist { width: 72px; text-align: right; }
+	.col-time { width: 65px; text-align: right; }
+	.col-pace { width: 75px; text-align: right; }
+	.col-hr { width: 60px; text-align: right; }
+	.col-rpe { width: 120px; padding: 0 4px; }
+	.col-feel { width: 110px; padding: 0 8px; }
+
+	.date-text {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+	}
+
+	.sport-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 0.7rem;
+		font-weight: 600;
+		padding: 2px 8px;
+		border-radius: 20px;
+		width: fit-content;
+		white-space: nowrap;
+	}
+
+	.activity-name {
+		font-size: 0.88rem;
+		font-weight: 500;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.mono {
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+	}
+
+	/* RPE selector */
+	.rpe-selector {
+		display: flex;
+		gap: 2px;
+	}
+	.rpe-dot {
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+		border: 1.5px solid var(--border);
+		background: transparent;
+		color: var(--text-muted);
+		font-size: 0.6rem;
+		font-family: var(--font-mono);
+		font-weight: 600;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		transition: all 0.15s;
+		cursor: pointer;
+	}
+	.rpe-dot:hover {
+		border-color: var(--rpe-color);
+		color: var(--rpe-color);
+		transform: scale(1.15);
+	}
+	.rpe-dot.active {
+		background: var(--rpe-color);
+		border-color: var(--rpe-color);
+		color: white;
+		transform: scale(1.1);
+	}
+
+	/* Feeling selector */
+	.feeling-selector {
+		display: flex;
+		gap: 1px;
+	}
+	.feeling-btn {
+		background: none;
+		border: none;
+		font-size: 0.85rem;
+		padding: 2px;
+		opacity: 0.35;
+		transition: all 0.15s;
+		cursor: pointer;
+		filter: grayscale(100%);
+	}
+	.feeling-btn:hover {
+		opacity: 0.8;
+		transform: scale(1.2);
+		filter: grayscale(0%);
+	}
+	.feeling-btn.active {
+		opacity: 1;
+		transform: scale(1.15);
+		filter: grayscale(0%);
+	}
+
+	/* Pagination */
+	.pagination {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+		margin-top: 24px;
+		padding: 16px;
+	}
+
+	.page-btn {
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		color: var(--text-primary);
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		padding: 8px 16px;
+		transition: all 0.15s;
+	}
+	.page-btn:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent-light);
+	}
+	.page-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	.page-info {
+		font-family: var(--font-mono);
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+	}
+
+	.empty-state {
+		padding: 60px 20px;
+		text-align: center;
+		color: var(--text-muted);
+	}
+
+	/* Mobile responsive */
+	@media (max-width: 768px) {
+		.list-header { display: none; }
+
+		.activity-row {
+			flex-direction: column;
+			align-items: stretch;
+			padding: 0;
+		}
+
+		.row-link {
+			flex-wrap: wrap;
+			gap: 6px;
+			padding: 12px 14px;
+		}
+
+		.col-date { width: auto; }
+		.col-name { width: 100%; order: -1; }
+		.col-dist, .col-time, .col-pace, .col-hr {
+			width: auto;
+			text-align: left;
+			font-size: 0.78rem;
+		}
+		.col-rpe, .col-feel {
+			width: auto;
+			padding: 0 14px 10px;
+		}
+
+		.rpe-selector, .feeling-selector {
+			gap: 3px;
+		}
+		.rpe-dot { width: 24px; height: 24px; font-size: 0.65rem; }
+		.feeling-btn { font-size: 1rem; padding: 3px; }
+	}
+</style>
