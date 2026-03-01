@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+	--bg-primary: #0a0a0f;
+	--bg-secondary: #12121a;
+	--bg-card: #1a1a26;
+	--bg-card-hover: #22222f;
+	--bg-input: #15151f;
+	--border: #2a2a3a;
+	--border-light: #333346;
+	--text-primary: #e8e8f0;
+	--text-secondary: #8888a0;
+	--text-muted: #555568;
+	--accent: #6c5ce7;
+	--accent-light: #a29bfe;
+	--accent-glow: rgba(108, 92, 231, 0.15);
+	--success: #00d2a0;
+	--warning: #ffc048;
+	--danger: #ff6b6b;
+	--run: #6c5ce7;
+	--ride: #00b894;
+	--swim: #0984e3;
+	--ski: #74b9ff;
+	--walk: #ffc048;
+	--other: #8888a0;
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 16px;
+	--font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+	--font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+body {
+	font-family: var(--font-sans);
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	min-height: 100vh;
+	-webkit-font-smoothing: antialiased;
+}
+
+a {
+	color: var(--accent-light);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+button {
+	font-family: var(--font-sans);
+	cursor: pointer;
+}
