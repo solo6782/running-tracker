@@ -193,11 +193,13 @@ ${JSON.stringify(last4WeeksSummary, null, 0)}
 - Course : ${programme.race_name}
 - Date : ${programme.race_date} (dans ${daysUntilRace} jours)
 - Distance : ${programme.race_distance_km} km
-${programme.race_elevation_m ? `- Dénivelé : D+${programme.race_elevation_m}m` : ''}
+${programme.race_elevation_gain ? `- Dénivelé : D+${programme.race_elevation_gain}m` : ''}
+${programme.race_profile ? `- Profil du parcours : ${programme.race_profile}` : ''}
+${programme.race_location ? `- Lieu : ${programme.race_location}` : ''}
 - Objectif : ${programme.objective_type === 'time' ? `Temps cible ${programme.objective_time}` : 'Finir la course'}
 
 ## INSTRUCTIONS
-Donne ton analyse complète en français, de manière directe et honnête mais bienveillante. Couvre ces points :
+Donne ton analyse complète en français, de manière directe et honnête mais bienveillante. Prends en compte le profil du parcours (dénivelé, terrain) dans ton estimation de temps et ton analyse. Couvre ces points :
 
 1. **État de forme actuel** : analyse du volume, de la régularité, des allures, du RPE/ressenti
 2. **Composition corporelle** : commentaire sur le poids et son évolution si données disponibles
