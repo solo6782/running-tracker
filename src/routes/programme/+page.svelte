@@ -5,9 +5,59 @@
 	let raceName = '';
 	let raceDate = '';
 	let raceDistance = '';
+	let raceLocation = '';
+	let raceElevation = null;
+	let raceProfile = '';
+	let raceUrl = '';
 	let objectiveType = 'finish'; // 'finish' or 'time'
 	let objectiveTime = ''; // e.g. "1:45:00"
 	let programCreated = false;
+
+	// Search state
+	let searching = false;
+	let searchResult = null;
+	let searchError = '';
+
+	async function searchRace() {
+		if (!raceName || raceName.length < 3) return;
+		searching = true;
+		searchError = '';
+		searchResult = null;
+
+		try {
+			const res = await fetch('/api/race-search', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ query: raceName })
+			});
+			const data = await res.json();
+
+			if (data.error) {
+				searchError = data.error;
+			} else if (data.found) {
+				searchResult = data;
+				// Auto-fill fields
+				if (data.name) raceName = data.name;
+				if (data.date) raceDate = data.date;
+				if (data.distance_km) raceDistance = data.distance_km;
+				if (data.location) raceLocation = data.location;
+				if (data.elevation_gain) raceElevation = data.elevation_gain;
+				if (data.profile) raceProfile = data.profile;
+				if (data.url) raceUrl = data.url;
+			} else {
+				searchError = 'Course non trouvée. Tu peux remplir les infos manuellement.';
+			}
+		} catch (err) {
+			searchError = `Erreur de recherche: ${err.message}`;
+		} finally {
+			searching = false;
+		}
+	}
+
+	function dismissSearch() {
+		searchResult = null;
+		searchError = '';
+	}
 
 	// Calendar data: { 'YYYY-MM-DD': { run: bool, ride: bool } }
 	let availability = {};
@@ -160,11 +210,75 @@
 		</div>
 
 		<div class="form-card">
-			<!-- Race Name -->
+			<!-- Race Name + Search -->
 			<div class="field">
 				<label for="race-name">Nom de la course</label>
-				<input id="race-name" type="text" bind:value={raceName} placeholder="Ex: Marathon de Paris" />
+				<div class="search-row">
+					<input id="race-name" type="text" bind:value={raceName} placeholder="Ex: Marathon de Paris"
+						on:keydown={(e) => e.key === 'Enter' && searchRace()} />
+					<button class="btn-search" on:click={searchRace} disabled={searching || raceName.length < 3}>
+						{#if searching}
+							<span class="spinner"></span>
+						{:else}
+							🔍
+						{/if}
+					</button>
+				</div>
+				<span class="field-hint-subtle">Tape le nom et clique 🔍 pour remplir automatiquement</span>
 			</div>
+
+			<!-- Search Result Card -->
+			{#if searchResult}
+				<div class="search-result">
+					<div class="sr-header">
+						<span class="sr-icon">✅</span>
+						<strong>{searchResult.name}</strong>
+						<button class="sr-dismiss" on:click={dismissSearch}>✕</button>
+					</div>
+					<div class="sr-details">
+						{#if searchResult.location}
+							<span class="sr-tag">📍 {searchResult.location}</span>
+						{/if}
+						{#if searchResult.date}
+							<span class="sr-tag">📅 {searchResult.date}</span>
+						{/if}
+						{#if searchResult.distance_km}
+							<span class="sr-tag">📏 {searchResult.distance_km}km</span>
+						{/if}
+						{#if searchResult.elevation_gain}
+							<span class="sr-tag">⛰️ D+{searchResult.elevation_gain}m</span>
+						{/if}
+						{#if searchResult.profile}
+							<span class="sr-tag">🗺️ {searchResult.profile}</span>
+						{/if}
+					</div>
+					{#if searchResult.distances && searchResult.distances.length > 1}
+						<div class="sr-distances">
+							<span class="sr-dist-label">Distances proposées :</span>
+							{#each searchResult.distances as d}
+								<button class="sr-dist-btn" on:click={() => {
+									const km = parseFloat(d);
+									if (!isNaN(km)) raceDistance = km;
+									else if (d.toLowerCase().includes('semi')) raceDistance = 21.1;
+									else if (d.toLowerCase().includes('marathon')) raceDistance = 42.195;
+									else if (d.toLowerCase().includes('10')) raceDistance = 10;
+									else if (d.toLowerCase().includes('5')) raceDistance = 5;
+								}}>{d}</button>
+							{/each}
+						</div>
+					{/if}
+					{#if searchResult.description}
+						<p class="sr-desc">{searchResult.description}</p>
+					{/if}
+					{#if searchResult.url}
+						<a href={searchResult.url} target="_blank" rel="noopener" class="sr-link">🔗 Site officiel</a>
+					{/if}
+				</div>
+			{/if}
+
+			{#if searchError}
+				<div class="search-error">{searchError}</div>
+			{/if}
 
 			<!-- Race Date -->
 			<div class="field">
@@ -248,8 +362,17 @@
 			<h1>{raceName}</h1>
 			<div class="race-meta">
 				<span class="race-tag">{raceDistance}km</span>
+				{#if raceLocation}
+					<span class="race-tag">📍 {raceLocation}</span>
+				{/if}
 				<span class="race-tag">{formatRaceDate(raceDate)}</span>
 				<span class="race-tag accent">J-{daysUntilRace}</span>
+				{#if raceElevation}
+					<span class="race-tag">⛰️ D+{raceElevation}m</span>
+				{/if}
+				{#if raceProfile}
+					<span class="race-tag">{raceProfile}</span>
+				{/if}
 				{#if objectiveType === 'time' && objectiveTime}
 					<span class="race-tag goal">🎯 {objectiveTime}</span>
 				{:else}
@@ -258,6 +381,9 @@
 			</div>
 		</div>
 		<button class="btn-reset" on:click={resetProgram}>✏️ Modifier</button>
+		{#if raceUrl}
+			<a href={raceUrl} target="_blank" rel="noopener" class="btn-ext">🔗</a>
+		{/if}
 	</div>
 
 	<!-- Availability Stats -->
@@ -467,6 +593,132 @@
 		color: var(--accent-light);
 		font-family: var(--font-mono);
 	}
+	.field-hint-subtle {
+		font-size: 0.72rem;
+		color: var(--text-muted);
+	}
+
+	/* Search row */
+	.search-row {
+		display: flex;
+		gap: 8px;
+	}
+	.search-row input { flex: 1; }
+	.btn-search {
+		background: var(--accent);
+		border: none;
+		border-radius: var(--radius-md);
+		color: white;
+		font-size: 1rem;
+		padding: 0 14px;
+		cursor: pointer;
+		transition: background 0.15s;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+	}
+	.btn-search:hover { background: var(--accent-light); }
+	.btn-search:disabled { opacity: 0.4; cursor: not-allowed; }
+
+	.spinner {
+		width: 18px;
+		height: 18px;
+		border: 2px solid rgba(255,255,255,0.3);
+		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+	@keyframes spin { to { transform: rotate(360deg); } }
+
+	/* Search result card */
+	.search-result {
+		background: rgba(0, 210, 160, 0.06);
+		border: 1px solid rgba(0, 210, 160, 0.2);
+		border-radius: var(--radius-md);
+		padding: 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.sr-header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.sr-header strong {
+		flex: 1;
+		font-size: 0.92rem;
+	}
+	.sr-icon { font-size: 1rem; }
+	.sr-dismiss {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		font-size: 0.85rem;
+		padding: 2px 6px;
+	}
+	.sr-dismiss:hover { color: var(--text-primary); }
+
+	.sr-details {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.sr-tag {
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		font-size: 0.73rem;
+		padding: 3px 10px;
+		color: var(--text-secondary);
+	}
+
+	.sr-distances {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+	.sr-dist-label {
+		font-size: 0.72rem;
+		color: var(--text-muted);
+	}
+	.sr-dist-btn {
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: 14px;
+		font-size: 0.72rem;
+		font-weight: 600;
+		padding: 3px 10px;
+		color: var(--text-secondary);
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+	.sr-dist-btn:hover {
+		border-color: var(--accent);
+		color: var(--accent-light);
+	}
+
+	.sr-desc {
+		font-size: 0.78rem;
+		color: var(--text-secondary);
+		line-height: 1.5;
+		margin: 0;
+	}
+	.sr-link {
+		font-size: 0.78rem;
+		color: var(--accent-light);
+	}
+
+	.search-error {
+		font-size: 0.8rem;
+		color: var(--warning);
+		padding: 8px 12px;
+		background: rgba(255, 192, 72, 0.08);
+		border-radius: var(--radius-sm);
+	}
 
 	.distance-presets {
 		display: flex;
@@ -597,6 +849,17 @@
 		flex-shrink: 0;
 	}
 	.btn-reset:hover { border-color: var(--accent); color: var(--text-primary); }
+	.btn-ext {
+		background: var(--bg-input);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		color: var(--text-secondary);
+		font-size: 0.85rem;
+		padding: 6px 10px;
+		text-decoration: none;
+		flex-shrink: 0;
+	}
+	.btn-ext:hover { border-color: var(--accent); text-decoration: none; }
 
 	/* Stats bar */
 	.stats-bar {
