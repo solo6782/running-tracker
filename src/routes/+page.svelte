@@ -59,7 +59,10 @@
 			</div>
 
 			{#if data.activityCount > 0}
-				<a href="/activities" class="btn btn-primary">
+				<a href="/dashboard" class="btn btn-primary">
+					📊 Dashboard
+				</a>
+				<a href="/activities" class="btn btn-secondary">
 					🏃 Voir mes activités ({data.activityCount})
 				</a>
 			{/if}
@@ -178,6 +181,18 @@
 
 	.btn-primary:hover {
 		background: var(--accent-light);
+	}
+
+	.btn-secondary {
+		background: var(--bg-input);
+		color: var(--text-primary);
+		border: 1px solid var(--border);
+	}
+
+	.btn-secondary:hover {
+		border-color: var(--accent);
+		color: var(--accent-light);
+		text-decoration: none;
 	}
 
 	.btn:disabled {

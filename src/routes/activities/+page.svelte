@@ -85,7 +85,7 @@
 <div class="page">
 	<header class="page-header">
 		<div class="header-top">
-			<a href="/" class="back-link">← Accueil</a>
+			<a href="/dashboard" class="back-link">← Dashboard</a>
 			<h1>Activités</h1>
 			<span class="count">{data.total} activités</span>
 		</div>
