@@ -382,6 +382,7 @@
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		background: var(--bg-card);
+		overflow-x: auto;
 	}
 
 	.list-header {
@@ -428,14 +429,14 @@
 	.row-link:hover { text-decoration: none; }
 
 	.col { flex-shrink: 0; }
-	.col-date { width: 110px; }
+	.col-date { width: 100px; }
 	.col-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-	.col-dist { width: 72px; text-align: right; }
-	.col-time { width: 65px; text-align: right; }
-	.col-pace { width: 75px; text-align: right; }
-	.col-hr { width: 60px; text-align: right; }
-	.col-rpe { width: 120px; padding: 0 4px; }
-	.col-feel { width: 110px; padding: 0 8px; }
+	.col-dist { width: 68px; text-align: right; }
+	.col-time { width: 58px; text-align: right; }
+	.col-pace { width: 70px; text-align: right; }
+	.col-hr { width: 55px; text-align: right; }
+	.col-rpe { width: 100px; padding: 0 2px; }
+	.col-feel { width: 80px; padding: 0 4px; }
 
 	.date-text {
 		font-size: 0.8rem;
@@ -473,13 +474,13 @@
 		gap: 2px;
 	}
 	.rpe-dot {
-		width: 20px;
-		height: 20px;
+		width: 18px;
+		height: 18px;
 		border-radius: 50%;
 		border: 1.5px solid var(--border);
 		background: transparent;
 		color: var(--text-muted);
-		font-size: 0.6rem;
+		font-size: 0.55rem;
 		font-family: var(--font-mono);
 		font-weight: 600;
 		display: flex;
@@ -509,8 +510,8 @@
 	.feeling-btn {
 		background: none;
 		border: none;
-		font-size: 0.85rem;
-		padding: 2px;
+		font-size: 0.75rem;
+		padding: 1px;
 		opacity: 0.35;
 		transition: all 0.15s;
 		cursor: pointer;
