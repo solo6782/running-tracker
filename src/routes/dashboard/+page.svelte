@@ -36,6 +36,7 @@
 		<div class="header-top">
 			<h1>🏃 Dashboard</h1>
 			<nav class="nav-links">
+				<a href="/charts">Graphiques</a>
 				<a href="/activities">Activités</a>
 			</nav>
 		</div>
