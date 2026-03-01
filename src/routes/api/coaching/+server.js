@@ -23,6 +23,14 @@ export async function POST({ request, platform }) {
 		return json({ error: 'Programme non trouvé' }, { status: 404 });
 	}
 
+	// 1b. Load other active programmes for context
+	const { data: otherProgrammes } = await supabase
+		.from('rt_programmes')
+		.select('race_name, race_date, race_distance_km, race_elevation_gain, race_profile')
+		.eq('is_active', true)
+		.neq('id', programmeId)
+		.order('race_date', { ascending: true });
+
 	// 2. Load athlete profile
 	const { data: profile } = await supabase
 		.from('rt_athlete_profile')
@@ -191,6 +199,10 @@ ${JSON.stringify(last4WeeksSummary, null, 0)}
 ${programme.race_elevation_gain ? `- Dénivelé : D+${programme.race_elevation_gain}m` : ''}
 ${programme.race_profile ? `- Profil : ${programme.race_profile}` : ''}
 - Objectif : ${programme.objective_type === 'time' ? `Temps cible ${programme.objective_time}` : 'Finir la course'}
+
+${otherProgrammes && otherProgrammes.length > 0 ? `## AUTRES COURSES PRÉVUES
+L'athlète a aussi d'autres courses prévues. Prends-les en compte dans la planification (récupération après une course, montée en charge progressive entre les courses) :
+${otherProgrammes.map(p => `- ${p.race_name} : ${p.race_date} — ${p.race_distance_km}km${p.race_elevation_gain ? ` (D+${p.race_elevation_gain}m)` : ''}${p.race_profile ? ` — ${p.race_profile}` : ''}`).join('\n')}` : ''}
 
 ## DISPONIBILITÉS
 Jours disponibles (run = course possible, ride = vélo possible) :

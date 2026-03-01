@@ -2,11 +2,25 @@ import { json } from '@sveltejs/kit';
 import { createServerClient } from '$lib/supabase.js';
 import { getEnv } from '$lib/env.js';
 
-// GET - Récupère le programme actif
-export async function GET({ platform }) {
+// GET - Récupère tous les programmes actifs
+export async function GET({ url, platform }) {
 	const env = getEnv(platform);
 	const supabase = createServerClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
+	const all = url.searchParams.get('all') === '1';
+
+	if (all) {
+		const { data, error } = await supabase
+			.from('rt_programmes')
+			.select('*')
+			.eq('is_active', true)
+			.order('race_date', { ascending: true });
+
+		if (error) return json({ error: error.message }, { status: 500 });
+		return json({ programmes: data || [] });
+	}
+
+	// Legacy: single programme
 	const { data, error } = await supabase
 		.from('rt_programmes')
 		.select('*')
@@ -15,32 +29,24 @@ export async function GET({ platform }) {
 		.limit(1)
 		.single();
 
-	if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
+	if (error && error.code !== 'PGRST116') {
 		return json({ error: error.message }, { status: 500 });
 	}
 
 	return json({ programme: data || null });
 }
 
-// POST - Crée un nouveau programme (désactive les anciens)
+// POST - Crée un nouveau programme (ne désactive PAS les autres)
 export async function POST({ request, platform }) {
 	const env = getEnv(platform);
 	const supabase = createServerClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
 	const body = await request.json();
 
-	// Valider les champs requis
 	if (!body.race_name || !body.race_date || !body.race_distance_km) {
 		return json({ error: 'Champs requis manquants' }, { status: 400 });
 	}
 
-	// Désactiver les anciens programmes
-	await supabase
-		.from('rt_programmes')
-		.update({ is_active: false })
-		.eq('is_active', true);
-
-	// Créer le nouveau
 	const { data, error } = await supabase
 		.from('rt_programmes')
 		.insert({

@@ -6,7 +6,12 @@
 	let saving = false;
 	let saveTimeout;
 
-	// Programme
+	// Programmes (multi-race)
+	let programmes = [];
+	let selectedIdx = 0;
+	let showAddForm = false;
+
+	// Current programme fields (synced with selected)
 	let programmeId = null;
 	let programCreated = false;
 	let raceName = '';
@@ -68,13 +73,16 @@
 	onMount(async () => {
 		try {
 			const [progRes, profRes] = await Promise.all([
-				fetch('/api/programme'),
+				fetch('/api/programme?all=1'),
 				fetch('/api/profile')
 			]);
 			const progData = await progRes.json();
 			const profData = await profRes.json();
 
-			if (progData.programme) loadProgramme(progData.programme);
+			if (progData.programmes && progData.programmes.length > 0) {
+				programmes = progData.programmes;
+				selectProgramme(0);
+			}
 			if (profData.profile) loadProfile(profData.profile);
 
 			// Check Withings connection (auto-sync once per day)
@@ -90,7 +98,7 @@
 			// Check URL params for Withings redirect result
 			const params = new URLSearchParams(window.location.search);
 			if (params.get('withings') === 'connected') {
-				fetchWithings(true); // force sync on first connect
+				fetchWithings(true);
 				window.history.replaceState({}, '', '/programme');
 			}
 		} catch (err) {
@@ -129,6 +137,12 @@
 		}
 	}
 
+	function selectProgramme(idx) {
+		if (idx < 0 || idx >= programmes.length) return;
+		selectedIdx = idx;
+		loadProgramme(programmes[idx]);
+	}
+
 	function loadProgramme(p) {
 		programmeId = p.id;
 		raceName = p.race_name;
@@ -142,10 +156,21 @@
 		objectiveTime = p.objective_time || '';
 		availability = p.availability || {};
 		programCreated = true;
+		showAddForm = false;
 
 		// Load saved AI analysis
 		if (availability._ai_analysis) {
 			analysisData = availability._ai_analysis;
+		} else {
+			analysisData = null;
+		}
+
+		// Load coaching summary from plan if present
+		const plans = Object.entries(availability).filter(([k, v]) => k !== '_ai_analysis' && v?.plan);
+		if (plans.length > 0) {
+			coachingSummary = ''; coachingLevel = ''; coachingVolume = '';
+		} else {
+			coachingSummary = ''; coachingLevel = ''; coachingVolume = '';
 		}
 	}
 
@@ -289,20 +314,47 @@
 				})
 			});
 			const data = await res.json();
-			if (data.programme) { programmeId = data.programme.id; programCreated = true; }
+			if (data.programme) {
+				programmes = [...programmes, data.programme].sort((a, b) => a.race_date.localeCompare(b.race_date));
+				selectedIdx = programmes.findIndex(p => p.id === data.programme.id);
+				loadProgramme(data.programme);
+			}
 		} catch (err) { console.error(err); }
 		finally { saving = false; }
-		// Save profile too
 		await saveProfile();
 	}
 
-	async function resetProgram() {
-		if (programmeId) await fetch(`/api/programme?id=${programmeId}`, { method: 'DELETE' });
-		programCreated = false; programmeId = null; availability = {};
-		raceName = ''; raceDate = ''; raceDistance = '';
+	async function deleteRace() {
+		if (!programmeId) return;
+		if (!confirm(`Supprimer "${raceName}" ?`)) return;
+		await fetch(`/api/programme?id=${programmeId}`, { method: 'DELETE' });
+		programmes = programmes.filter(p => p.id !== programmeId);
+		if (programmes.length > 0) {
+			selectProgramme(0);
+		} else {
+			programCreated = false; programmeId = null; availability = {};
+			raceName = ''; raceDate = ''; raceDistance = '';
+			raceLocation = ''; raceElevation = null; raceProfile = ''; raceUrl = '';
+			objectiveType = 'finish'; objectiveTime = '';
+			searchResult = null; coachingSummary = ''; coachingLevel = '';
+			analysisData = null;
+		}
+	}
+
+	function showAddRaceForm() {
+		showAddForm = true;
+		programmeId = null; raceName = ''; raceDate = ''; raceDistance = '';
 		raceLocation = ''; raceElevation = null; raceProfile = ''; raceUrl = '';
 		objectiveType = 'finish'; objectiveTime = '';
-		searchResult = null; coachingSummary = ''; coachingLevel = '';
+		searchResult = null; searchError = '';
+		availability = {};
+	}
+
+	function cancelAddRace() {
+		showAddForm = false;
+		if (programmes.length > 0) {
+			selectProgramme(selectedIdx);
+		}
 	}
 
 	function setAllDays(type, value) {
@@ -399,13 +451,16 @@
 {#if loading}
 	<div class="loading-state"><span class="spinner-lg"></span><p>Chargement...</p></div>
 
-{:else if !programCreated}
+{:else if programmes.length === 0 || showAddForm}
 <!-- ===== SETUP ===== -->
 <div class="setup-section">
 	<div class="setup-header">
 		<span class="setup-icon">🎯</span>
-		<h1>Nouveau programme</h1>
+		<h1>{showAddForm ? 'Ajouter une course' : 'Nouveau programme'}</h1>
 		<p class="setup-sub">Configure ta course et ton profil</p>
+		{#if showAddForm}
+			<button class="btn-cancel-add" on:click={cancelAddRace}>← Retour</button>
+		{/if}
 	</div>
 
 	<div class="form-card">
@@ -567,6 +622,20 @@
 {:else}
 <!-- ===== PROGRAMME VIEW ===== -->
 
+<!-- Race Tabs -->
+{#if programmes.length > 1}
+<div class="race-tabs">
+	{#each programmes as prog, i}
+		<button class="race-tab" class:active={i === selectedIdx} on:click={() => selectProgramme(i)}>
+			<span class="rt-name">{prog.race_name}</span>
+			<span class="rt-date">{formatRaceDate(prog.race_date)}</span>
+			<span class="rt-dist">{prog.race_distance_km}km</span>
+		</button>
+	{/each}
+	<button class="race-tab add-tab" on:click={showAddRaceForm}>+ Ajouter</button>
+</div>
+{/if}
+
 <!-- Race Header -->
 <div class="race-header">
 	<div class="race-info">
@@ -585,7 +654,10 @@
 		</div>
 	</div>
 	<div class="header-actions">
-		<button class="btn-sm" on:click={resetProgram}>✏️ Modifier</button>
+		{#if programmes.length <= 1}
+			<button class="btn-sm" on:click={showAddRaceForm}>+ Ajouter une course</button>
+		{/if}
+		<button class="btn-sm danger" on:click={deleteRace}>🗑️</button>
 		{#if raceUrl}<a href={raceUrl} target="_blank" rel="noopener" class="btn-sm">🔗</a>{/if}
 		{#if saving}<span class="save-indicator"><span class="spinner-sm"></span></span>{/if}
 	</div>
@@ -871,6 +943,19 @@
 	.btn-create:disabled { opacity: 0.4; cursor: not-allowed; }
 
 	/* === PROGRAMME VIEW === */
+	.race-tabs { display: flex; gap: 6px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+	.race-tab { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; min-width: 120px; transition: all 0.2s; }
+	.race-tab:hover { border-color: var(--accent); }
+	.race-tab.active { border-color: var(--accent); background: rgba(99,102,241,0.1); }
+	.rt-name { font-size: 0.82rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.rt-date { font-size: 0.68rem; color: var(--text-muted); }
+	.rt-dist { font-size: 0.68rem; color: var(--accent); font-weight: 600; }
+	.race-tab.add-tab { border-style: dashed; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.82rem; min-width: 80px; }
+	.race-tab.add-tab:hover { color: var(--accent); border-color: var(--accent); }
+	.btn-cancel-add { background: none; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-secondary); font-size: 0.8rem; padding: 5px 12px; cursor: pointer; margin-top: 8px; }
+	.btn-cancel-add:hover { border-color: var(--accent); }
+	.btn-sm.danger { color: #ef4444; border-color: rgba(239,68,68,0.3); }
+	.btn-sm.danger:hover { background: rgba(239,68,68,0.1); border-color: #ef4444; }
 	.race-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 12px; }
 	.race-header h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
 	.race-meta { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -968,6 +1053,8 @@
 		.stats-bar { flex-wrap: wrap; gap: 10px; padding: 10px 14px; }
 		.stat-sep { display: none; }
 		.actions-row { flex-direction: column; align-items: stretch; }
+		.race-tabs { gap: 4px; }
+		.race-tab { min-width: 100px; padding: 6px 10px; }
 		.v-day { flex-wrap: wrap; padding: 6px 8px; gap: 6px; }
 		.v-date { width: 90px; }
 		.v-plan { width: 100%; }
