@@ -157,9 +157,8 @@
 						{getSportIcon(activity.sport_type)} {activity.sport_type}
 					</span>
 					<span class="activity-name">{activity.name || '—'}</span>
-					{@const actDate = activity.activity_date?.split('T')[0]}
-					{#if actDate && data.plannedDates[actDate]}
-						<span class="plan-badge" title="Séance prévue : {data.plannedDates[actDate].title} ({data.plannedDates[actDate].race})">📋</span>
+					{#if activity.activity_date && data.plannedDates[activity.activity_date.split('T')[0]]}
+						<span class="plan-badge" title="Séance prévue : {data.plannedDates[activity.activity_date.split('T')[0]].title} ({data.plannedDates[activity.activity_date.split('T')[0]].race})">📋</span>
 					{/if}
 				</div>
 				<div class="col col-dist mono">{formatDistance(activity.distance_m)}</div>
