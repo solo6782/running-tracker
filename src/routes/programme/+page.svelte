@@ -467,6 +467,119 @@
 		const map = { easy: 'Endurance', tempo: 'Seuil', intervals: 'Fractionné', long: 'Sortie longue', recovery: 'Récup', cross: 'Cross-training', rest: 'Repos' };
 		return map[t] || t;
 	}
+
+	// === GARMIN EXPORT ===
+	function paceToMps(paceStr) {
+		// "5:30" (min/km) → m/s
+		if (!paceStr) return null;
+		const [min, sec] = paceStr.split(':').map(Number);
+		const totalSec = min * 60 + (sec || 0);
+		return 1000 / totalSec; // m/s
+	}
+
+	const stepTypeMap = { warmup: { id: 1, key: 'warmup' }, interval: { id: 3, key: 'interval' }, cooldown: { id: 2, key: 'cooldown' }, recovery: { id: 4, key: 'recovery' } };
+	const endCondMap = { time: { id: 2, key: 'time' }, distance: { id: 3, key: 'distance' }, 'lap.button': { id: 1, key: 'lap.button' } };
+
+	function buildGarminStep(step, order, childStepId = null) {
+		const st = stepTypeMap[step.step_type] || stepTypeMap.interval;
+		const ec = endCondMap[step.end_type] || endCondMap.distance;
+		const hasPace = step.pace_target && step.pace_target.min_per_km && step.pace_target.max_per_km;
+		return {
+			type: 'ExecutableStepDTO',
+			stepId: null,
+			stepOrder: order,
+			stepType: { stepTypeId: st.id, stepTypeKey: st.key, displayOrder: st.id },
+			childStepId: childStepId,
+			description: step.description || null,
+			endCondition: { conditionTypeId: ec.id, conditionTypeKey: ec.key, displayOrder: ec.id, displayable: true },
+			endConditionValue: step.end_value || 0,
+			preferredEndConditionUnit: step.end_type === 'distance' && step.end_value >= 1000
+				? { unitId: 2, unitKey: 'kilometer', factor: 100000.0 } : null,
+			endConditionCompare: null,
+			targetType: hasPace
+				? { workoutTargetTypeId: 6, workoutTargetTypeKey: 'pace.zone', displayOrder: 6 }
+				: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target', displayOrder: 1 },
+			targetValueOne: hasPace ? paceToMps(step.pace_target.min_per_km) : null,
+			targetValueTwo: hasPace ? paceToMps(step.pace_target.max_per_km) : null,
+			targetValueUnit: null,
+			zoneNumber: null,
+			secondaryTargetType: null, secondaryTargetValueOne: null, secondaryTargetValueTwo: null,
+			secondaryTargetValueUnit: null, secondaryZoneNumber: null, endConditionZone: null,
+			strokeType: { strokeTypeId: 0, strokeTypeKey: null, displayOrder: 0 },
+			equipmentType: { equipmentTypeId: 0, equipmentTypeKey: null, displayOrder: 0 },
+			category: null, exerciseName: null, workoutProvider: null,
+			providerExerciseSourceId: null, weightValue: null, weightUnit: null
+		};
+	}
+
+	function buildGarminJson(plan, date) {
+		if (!plan.garmin_steps || plan.sport !== 'run') return null;
+		const workoutSteps = [];
+		let order = 1;
+
+		for (const step of plan.garmin_steps) {
+			if (step.type === 'repeat') {
+				const repeatSteps = [];
+				const childId = order;
+				for (const sub of (step.steps || [])) {
+					repeatSteps.push(buildGarminStep(sub, order + 1, childId));
+					order++;
+				}
+				workoutSteps.push({
+					type: 'RepeatGroupDTO',
+					stepId: null,
+					stepOrder: order,
+					stepType: { stepTypeId: 6, stepTypeKey: 'repeat', displayOrder: 6 },
+					childStepId: childId,
+					numberOfIterations: step.iterations || 1,
+					workoutSteps: repeatSteps,
+					endConditionValue: step.iterations || 1,
+					preferredEndConditionUnit: null,
+					endConditionCompare: null,
+					endCondition: { conditionTypeId: 7, conditionTypeKey: 'iterations', displayOrder: 7, displayable: false },
+					skipLastRestStep: true,
+					smartRepeat: false
+				});
+			} else {
+				workoutSteps.push(buildGarminStep(step, order));
+			}
+			order++;
+		}
+
+		return {
+			workoutName: `${plan.title} — ${date}`,
+			description: plan.description || null,
+			sportType: { sportTypeId: 1, sportTypeKey: 'running', displayOrder: 1 },
+			subSportType: null,
+			trainingPlanId: null,
+			estimatedDurationInSecs: (plan.duration_min || 0) * 60,
+			estimatedDistanceInMeters: (plan.distance_km || 0) * 1000,
+			workoutSegments: [{
+				segmentOrder: 1,
+				sportType: { sportTypeId: 1, sportTypeKey: 'running', displayOrder: 1 },
+				poolLengthUnit: null,
+				poolLength: null,
+				workoutSteps
+			}],
+			poolLength: null,
+			poolLengthUnit: null,
+			locale: null,
+			estimateType: null,
+			shared: false
+		};
+	}
+
+	function downloadGarmin(plan, date) {
+		const json = buildGarminJson(plan, date);
+		if (!json) return;
+		const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${plan.title.replace(/[^a-zA-Z0-9àâéèêëïîôùûüçÀÂÉÈÊËÏÎÔÙÛÜÇ ]/g, '').replace(/ /g, '_')}_${date}.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
 </script>
 
 <script context="module">
@@ -898,6 +1011,9 @@
 							<span class="plan-sport">{sportEmoji(plan.sport)}</span>
 							<span class="plan-title">{plan.title}</span>
 							<span class="plan-type" style="color: {intensityColor(plan.intensity)}">{typeLabel(plan.type)}</span>
+							{#if plan.garmin_steps && plan.sport === 'run'}
+								<button class="btn-garmin" on:click|stopPropagation={() => downloadGarmin(plan, day.date)} title="Télécharger pour Garmin">⌚</button>
+							{/if}
 						</div>
 						<div class="plan-details">
 							{#if plan.duration_min}<span>⏱ {plan.duration_min}min</span>{/if}
@@ -1107,6 +1223,8 @@
 	.plan-sport { font-size: 0.85rem; }
 	.plan-title { font-size: 0.82rem; font-weight: 600; flex: 1; }
 	.plan-type { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
+	.btn-garmin { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.72rem; padding: 1px 5px; cursor: pointer; margin-left: auto; opacity: 0.6; flex-shrink: 0; }
+	.btn-garmin:hover { opacity: 1; border-color: var(--accent); }
 	.plan-details { display: flex; gap: 10px; margin-top: 4px; font-size: 0.72rem; color: var(--text-secondary); font-family: var(--font-mono); }
 	.plan-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.4; margin: 4px 0 0; }
 

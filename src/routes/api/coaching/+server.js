@@ -217,6 +217,12 @@ Le plan doit être progressif, inclure de la variété (endurance fondamentale, 
 Respecte les principes : pas plus de 3 séances intenses par semaine, sortie longue le week-end, repos avant la course.
 Adapte l'intensité au niveau de l'athlète (débutant, intermédiaire, confirmé) basé sur son historique.
 
+CONTRAINTE ALLURE IMPORTANTE : L'athlète ne peut physiquement pas courir en dessous de 6:50/km (même en endurance fondamentale). Ne prescris JAMAIS d'allure supérieure à 6:50/km. L'endurance fondamentale doit être entre 6:20 et 6:50/km, la récupération entre 6:30 et 6:50/km.
+
+Pour chaque séance de course, inclus un champ "garmin_steps" avec les étapes structurées pour export Garmin.
+Chaque étape a : step_type ("warmup", "interval", "cooldown", "recovery"), end_type ("time" ou "distance"), end_value (secondes ou mètres), et optionnellement pace_target avec min_per_km et max_per_km (ex: "6:00" et "6:30").
+Pour les fractionnés, utilise un objet "repeat" avec "iterations" et "steps" (tableau d'étapes).
+
 Retourne UNIQUEMENT un JSON valide (sans markdown, sans backticks) avec cette structure :
 {
   "level": "débutant" | "intermédiaire" | "confirmé",
@@ -230,10 +236,26 @@ Retourne UNIQUEMENT un JSON valide (sans markdown, sans backticks) avec cette st
       "duration_min": nombre,
       "distance_km": nombre ou null,
       "description": "description détaillée de la séance en français (allure, zones, etc.)",
-      "intensity": "low" | "moderate" | "high"
+      "intensity": "low" | "moderate" | "high",
+      "garmin_steps": [
+        { "step_type": "warmup", "end_type": "distance", "end_value": 1000 },
+        { "step_type": "interval", "end_type": "time", "end_value": 1200, "pace_target": { "min_per_km": "5:30", "max_per_km": "6:00" } },
+        { "step_type": "cooldown", "end_type": "distance", "end_value": 1000 },
+        { "type": "repeat", "iterations": 4, "steps": [
+          { "step_type": "interval", "end_type": "distance", "end_value": 400, "pace_target": { "min_per_km": "5:00", "max_per_km": "5:20" } },
+          { "step_type": "recovery", "end_type": "time", "end_value": 90 }
+        ]}
+      ]
     }
   }
 }
+
+Notes sur garmin_steps :
+- Toute séance run DOIT avoir garmin_steps (pas les séances vélo)
+- Commence toujours par un warmup, termine par un cooldown
+- Les allures ne doivent JAMAIS dépasser 6:50/km (contrainte physique de l'athlète)
+- Pour l'endurance fondamentale : warmup 1km + interval principal (distance ou temps) + cooldown 1km
+- Pour les fractionnés : warmup + repeat(n)[interval + recovery] + cooldown
 
 Retourne UNIQUEMENT le JSON.`;
 
@@ -247,7 +269,7 @@ Retourne UNIQUEMENT le JSON.`;
 			},
 			body: JSON.stringify({
 				model: 'claude-sonnet-4-20250514',
-				max_tokens: 8000,
+				max_tokens: 16000,
 				messages: [{ role: 'user', content: prompt }]
 			})
 		});
