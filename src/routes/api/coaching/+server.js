@@ -139,9 +139,9 @@ export async function POST({ request, platform }) {
 
 	// 6. Build availability summary
 	const avail = programme.availability || {};
-	const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
+	const todayStr = new Date().toISOString().split('T')[0];
 	const trainingDays = Object.entries(avail)
-		.filter(([date, v]) => date >= todayMidnight.toISOString().split('T')[0])
+		.filter(([date, v]) => /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= todayStr)
 		.sort(([a], [b]) => a.localeCompare(b))
 		.map(([date, v]) => ({
 			date,
@@ -206,11 +206,12 @@ L'athlète a aussi d'autres courses prévues. Prends-les en compte dans la plani
 ${otherProgrammes.map(p => `- ${p.race_name} : ${p.race_date} — ${p.race_distance_km}km${p.race_elevation_gain ? ` (D+${p.race_elevation_gain}m)` : ''}${p.race_profile ? ` — ${p.race_profile}` : ''}`).join('\n')}` : ''}
 
 ## DISPONIBILITÉS
+Aujourd'hui : ${todayStr}
 Jours disponibles (run = course possible, ride = vélo possible) :
-${trainingDays.map(d => `${d.date}: ${d.run && d.ride ? 'run ou vélo' : d.run ? 'run uniquement' : d.ride ? 'vélo uniquement' : 'REPOS OBLIGATOIRE — NE PAS PLANIFIER DE SÉANCE'}`).join('\n')}
+${trainingDays.map(d => `${d.date}${d.date === todayStr ? ' (AUJOURD\'HUI)' : ''}: ${d.run && d.ride ? 'run ou vélo' : d.run ? 'run uniquement' : d.ride ? 'vélo uniquement' : 'REPOS OBLIGATOIRE — NE PAS PLANIFIER DE SÉANCE'}`).join('\n')}
 
 ## INSTRUCTIONS
-Génère un plan d'entraînement UNIQUEMENT pour les jours marqués "run", "vélo", ou "run ou vélo".
+Génère un plan d'entraînement pour CHAQUE jour disponible marqué "run", "vélo", ou "run ou vélo", Y COMPRIS le jour d'aujourd'hui.
 NE GÉNÈRE AUCUNE SÉANCE pour les jours marqués "REPOS OBLIGATOIRE". Ne les inclus pas du tout dans le JSON.
 Le plan doit être progressif, inclure de la variété (endurance fondamentale, seuil, fractionné, sortie longue, récupération, vélo cross-training).
 Respecte les principes : pas plus de 3 séances intenses par semaine, sortie longue le week-end, repos avant la course.

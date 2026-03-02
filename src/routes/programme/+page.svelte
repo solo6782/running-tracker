@@ -267,16 +267,20 @@
 	const dayNames = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'];
 	const monthNames = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'août', 'sep', 'oct', 'nov', 'déc'];
 
+	function toLocalDateStr(d) {
+		return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+	}
+
 	function generateDays(raceDateStr) {
 		if (!raceDateStr) return [];
 		const today = new Date(); today.setHours(0,0,0,0);
-		const end = new Date(raceDateStr); end.setHours(0,0,0,0);
+		const end = new Date(raceDateStr + 'T00:00:00'); // parse as local
 		if (end <= today) return [];
 
 		const days = [];
 		let current = new Date(today);
 		while (current <= end) {
-			const dateStr = current.toISOString().split('T')[0];
+			const dateStr = toLocalDateStr(current);
 			const dow = current.getDay();
 			days.push({
 				date: dateStr,
