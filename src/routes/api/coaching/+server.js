@@ -139,8 +139,9 @@ export async function POST({ request, platform }) {
 
 	// 6. Build availability summary
 	const avail = programme.availability || {};
+	const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
 	const trainingDays = Object.entries(avail)
-		.filter(([date, v]) => new Date(date) >= new Date())
+		.filter(([date, v]) => date >= todayMidnight.toISOString().split('T')[0])
 		.sort(([a], [b]) => a.localeCompare(b))
 		.map(([date, v]) => ({
 			date,
