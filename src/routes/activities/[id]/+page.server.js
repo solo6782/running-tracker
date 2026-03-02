@@ -8,7 +8,7 @@ export async function load({ params, platform }) {
 
 	const { data, error: dbError } = await supabaseAdmin
 		.from('rt_activities')
-		.select('id, strava_id, sport_type, name, description, activity_date, elapsed_time_s, moving_time_s, distance_m, avg_hr, max_hr, calories, avg_speed_ms, max_speed_ms, avg_watts, weighted_avg_power, avg_cadence, max_cadence, training_load, elevation_gain, elevation_loss, elevation_low, elevation_high, summary_polyline, gear_name, perceived_difficulty, perceived_feeling, weather_temp, weather_condition, weather_humidity, weather_wind_speed, laps, splits_metric, best_efforts, ai_feedback, ai_feedback_at')
+		.select('id, strava_id, sport_type, name, description, activity_date, elapsed_time_s, moving_time_s, distance_m, avg_hr, max_hr, calories, avg_speed_ms, max_speed_ms, avg_watts, weighted_avg_power, avg_cadence, max_cadence, training_load, elevation_gain, elevation_loss, elevation_low, elevation_high, summary_polyline, gear_name, perceived_difficulty, perceived_feeling, weather_temp, weather_condition, weather_humidity, weather_wind_speed, laps, splits_metric, best_efforts, ai_feedback, ai_feedback_at, streams')
 		.eq('id', params.id)
 		.single();
 

@@ -18,6 +18,11 @@
 	let lapsLoading = false;
 	let lapsError = '';
 
+	// Streams
+	let streams = activity.streams || null;
+	let streamsLoading = false;
+	let streamsError = '';
+
 	// AI Feedback
 	let aiFeedback = activity.ai_feedback || '';
 	let feedbackLoading = false;
@@ -50,6 +55,57 @@
 			aiFeedback = data.feedback;
 		} catch (e) { feedbackError = e.message; }
 		finally { feedbackLoading = false; }
+	}
+
+	async function fetchStreams() {
+		if (streams) return;
+		streamsLoading = true;
+		streamsError = '';
+		try {
+			const res = await fetch(`/api/activities/${activity.id}/streams`, { method: 'POST' });
+			const data = await res.json();
+			if (data.error) { streamsError = data.error; return; }
+			streams = data.streams;
+		} catch (e) { streamsError = e.message; }
+		finally { streamsLoading = false; }
+	}
+
+	// SVG chart helpers
+	function buildSvgPath(points, width, height, minY, maxY) {
+		if (!points || points.length < 2) return '';
+		const rangeY = maxY - minY || 1;
+		return points.map((p, i) => {
+			const x = (i / (points.length - 1)) * width;
+			const y = height - ((p - minY) / rangeY) * height;
+			return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+		}).join(' ');
+	}
+
+	function buildAreaPath(points, width, height, minY, maxY) {
+		const line = buildSvgPath(points, width, height, minY, maxY);
+		if (!line) return '';
+		return line + ` L${width},${height} L0,${height} Z`;
+	}
+
+	// Convert velocity (m/s) to pace (min/km) — lower pace = faster
+	function velocityToPace(v) {
+		if (!v || v <= 0) return 12; // cap at 12 min/km
+		const pace = (1000 / v) / 60;
+		return Math.min(pace, 12);
+	}
+
+	// Downsample for smooth rendering
+	function smoothData(data, windowSize = 5) {
+		if (!data || data.length < windowSize) return data;
+		const result = [];
+		for (let i = 0; i < data.length; i++) {
+			const start = Math.max(0, i - Math.floor(windowSize / 2));
+			const end = Math.min(data.length, i + Math.ceil(windowSize / 2));
+			let sum = 0;
+			for (let j = start; j < end; j++) sum += data[j];
+			result.push(sum / (end - start));
+		}
+		return result;
 	}
 
 	function formatLapPace(speed) {
@@ -385,6 +441,150 @@
 					</div>
 				{/each}
 			</div>
+		</div>
+	{/if}
+
+	<!-- Streams Charts -->
+	{#if streams}
+		{@const chartW = 680}
+		{@const chartH = 160}
+
+		<!-- Pace chart -->
+		{#if streams.velocity_smooth && streams.distance}
+			{@const paceData = smoothData(streams.velocity_smooth.map(v => velocityToPace(v)), 7)}
+			{@const minPace = Math.max(3, Math.min(...paceData) - 0.3)}
+			{@const maxPace = Math.min(12, Math.max(...paceData) + 0.3)}
+			{@const distKm = streams.distance[streams.distance.length - 1] / 1000}
+			<div class="section">
+				<h2>⚡ Allure</h2>
+				<div class="chart-card">
+					<div class="chart-labels">
+						<span>{Math.floor(minPace)}:{String(Math.round((minPace % 1) * 60)).padStart(2, '0')}/km</span>
+						<span>{Math.floor(maxPace)}:{String(Math.round((maxPace % 1) * 60)).padStart(2, '0')}/km</span>
+					</div>
+					<div class="chart-wrap">
+						<svg viewBox="0 0 {chartW} {chartH}" preserveAspectRatio="none" class="stream-chart">
+							<!-- Grid lines -->
+							{#each [0.25, 0.5, 0.75] as frac}
+								<line x1="0" y1={chartH * frac} x2={chartW} y2={chartH * frac} stroke="var(--border)" stroke-width="0.5" stroke-dasharray="4,4" />
+							{/each}
+							<!-- Area fill -->
+							<path d={buildAreaPath(paceData, chartW, chartH, maxPace, minPace)} fill="rgba(59, 130, 246, 0.1)" />
+							<!-- Line -->
+							<path d={buildSvgPath(paceData, chartW, chartH, maxPace, minPace)} fill="none" stroke="#3b82f6" stroke-width="1.5" />
+						</svg>
+					</div>
+					<div class="chart-x-labels">
+						<span>0</span>
+						<span>{(distKm / 4).toFixed(1)}</span>
+						<span>{(distKm / 2).toFixed(1)}</span>
+						<span>{(distKm * 3 / 4).toFixed(1)}</span>
+						<span>{distKm.toFixed(1)} km</span>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Heart Rate chart -->
+		{#if streams.heartrate}
+			{@const hrData = smoothData(streams.heartrate, 7)}
+			{@const minHR = Math.max(60, Math.min(...hrData) - 5)}
+			{@const maxHR = Math.min(220, Math.max(...hrData) + 5)}
+			{@const z2top = chartH - ((140 - minHR) / (maxHR - minHR)) * chartH}
+			{@const z3top = chartH - ((155 - minHR) / (maxHR - minHR)) * chartH}
+			{@const z4top = chartH - ((170 - minHR) / (maxHR - minHR)) * chartH}
+			<div class="section">
+				<h2>❤️ Fréquence cardiaque</h2>
+				<div class="chart-card">
+					<div class="chart-labels">
+						<span>{Math.round(maxHR)} bpm</span>
+						<span>{Math.round(minHR)} bpm</span>
+					</div>
+					<div class="chart-wrap">
+						<svg viewBox="0 0 {chartW} {chartH}" preserveAspectRatio="none" class="stream-chart">
+							{#each [0.25, 0.5, 0.75] as frac}
+								<line x1="0" y1={chartH * frac} x2={chartW} y2={chartH * frac} stroke="var(--border)" stroke-width="0.5" stroke-dasharray="4,4" />
+							{/each}
+							<!-- Zone color bands -->
+							<rect x="0" y={Math.max(0, z4top)} width={chartW} height={Math.max(0, chartH - z4top)} fill="rgba(239, 68, 68, 0.04)" />
+							<rect x="0" y={Math.max(0, z3top)} width={chartW} height={Math.max(0, z4top - z3top)} fill="rgba(234, 179, 8, 0.04)" />
+							<rect x="0" y={Math.max(0, z2top)} width={chartW} height={Math.max(0, z3top - z2top)} fill="rgba(34, 197, 94, 0.04)" />
+							<!-- Area + Line -->
+							<path d={buildAreaPath(hrData, chartW, chartH, minHR, maxHR)} fill="rgba(239, 68, 68, 0.1)" />
+							<path d={buildSvgPath(hrData, chartW, chartH, minHR, maxHR)} fill="none" stroke="#ef4444" stroke-width="1.5" />
+						</svg>
+					</div>
+					<div class="chart-zone-legend">
+						<span class="zone z1">Z1-2</span>
+						<span class="zone z3">Z3</span>
+						<span class="zone z4">Z4-5</span>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Altitude profile -->
+		{#if streams.altitude}
+			{@const altData = smoothData(streams.altitude, 5)}
+			{@const minAlt = Math.min(...altData) - 5}
+			{@const maxAlt = Math.max(...altData) + 5}
+			<div class="section">
+				<h2>⛰️ Altitude</h2>
+				<div class="chart-card">
+					<div class="chart-labels">
+						<span>{Math.round(maxAlt)}m</span>
+						<span>{Math.round(minAlt)}m</span>
+					</div>
+					<div class="chart-wrap">
+						<svg viewBox="0 0 {chartW} {chartH * 0.75}" preserveAspectRatio="none" class="stream-chart altitude">
+							<defs>
+								<linearGradient id="altGrad" x1="0" y1="0" x2="0" y2="1">
+									<stop offset="0%" stop-color="rgba(16, 185, 129, 0.3)" />
+									<stop offset="100%" stop-color="rgba(16, 185, 129, 0.02)" />
+								</linearGradient>
+							</defs>
+							<path d={buildAreaPath(altData, chartW, chartH * 0.75, minAlt, maxAlt)} fill="url(#altGrad)" />
+							<path d={buildSvgPath(altData, chartW, chartH * 0.75, minAlt, maxAlt)} fill="none" stroke="#10b981" stroke-width="1.5" />
+						</svg>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Cadence chart -->
+		{#if streams.cadence}
+			{@const cadData = smoothData(streams.cadence, 7)}
+			{@const minCad = Math.max(0, Math.min(...cadData.filter(c => c > 0)) - 5)}
+			{@const maxCad = Math.max(...cadData) + 5}
+			<div class="section">
+				<h2>🦶 Cadence</h2>
+				<div class="chart-card">
+					<div class="chart-labels">
+						<span>{Math.round(maxCad)} spm</span>
+						<span>{Math.round(minCad)} spm</span>
+					</div>
+					<div class="chart-wrap">
+						<svg viewBox="0 0 {chartW} {chartH * 0.6}" preserveAspectRatio="none" class="stream-chart">
+							<path d={buildAreaPath(cadData, chartW, chartH * 0.6, minCad, maxCad)} fill="rgba(168, 85, 247, 0.08)" />
+							<path d={buildSvgPath(cadData, chartW, chartH * 0.6, minCad, maxCad)} fill="none" stroke="#a855f7" stroke-width="1.5" />
+						</svg>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+	{:else if !streams && activity.strava_id}
+		<div class="section">
+			<h2>📈 Graphiques détaillés</h2>
+			{#if streamsLoading}
+				<p class="loading-text">⏳ Chargement des streams depuis Strava...</p>
+			{:else if streamsError}
+				<p class="error-msg">{streamsError}</p>
+			{:else}
+				<button class="btn-get-streams" on:click={fetchStreams}>
+					📈 Charger les graphiques (allure, FC, altitude)
+				</button>
+			{/if}
 		</div>
 	{/if}
 
@@ -744,4 +944,70 @@
 	.effort-chip { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; font-size: 0.78rem; }
 	.effort-name { color: var(--text-secondary); }
 	.effort-time { font-weight: 600; font-family: var(--font-mono); }
+
+	/* Stream charts */
+	.chart-card {
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		padding: 14px 16px;
+	}
+	.chart-labels {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.68rem;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		margin-bottom: 4px;
+	}
+	.chart-wrap {
+		width: 100%;
+		overflow: hidden;
+	}
+	.stream-chart {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+	.stream-chart.altitude {
+		height: auto;
+	}
+	.chart-x-labels {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.65rem;
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		margin-top: 4px;
+	}
+	.chart-zone-legend {
+		display: flex;
+		gap: 12px;
+		justify-content: center;
+		margin-top: 6px;
+		font-size: 0.65rem;
+		font-family: var(--font-mono);
+	}
+	.zone {
+		padding: 1px 6px;
+		border-radius: 3px;
+	}
+	.zone.z1 { background: rgba(34, 197, 94, 0.12); color: #22c55e; }
+	.zone.z3 { background: rgba(234, 179, 8, 0.12); color: #eab308; }
+	.zone.z4 { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+
+	.btn-get-streams {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 16px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		background: var(--surface);
+		cursor: pointer;
+		font-size: 0.82rem;
+		color: var(--text-secondary);
+		transition: all 0.15s;
+	}
+	.btn-get-streams:hover { border-color: #3b82f6; color: #3b82f6; }
 </style>
