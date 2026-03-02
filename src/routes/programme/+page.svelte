@@ -297,6 +297,10 @@
 	function toggleAvailability(dateStr, type) {
 		if (!availability[dateStr]) availability[dateStr] = { run: false, ride: false };
 		availability[dateStr][type] = !availability[dateStr][type];
+		// If both off, clear the plan for this day
+		if (!availability[dateStr].run && !availability[dateStr].ride) {
+			delete availability[dateStr].plan;
+		}
 		availability = availability;
 		debounceSave();
 	}
@@ -394,6 +398,10 @@
 			if (!day.isRaceDay) {
 				if (!availability[day.date]) availability[day.date] = { run: false, ride: false };
 				availability[day.date][type] = value;
+				// If both off, clear the plan
+				if (!availability[day.date].run && !availability[day.date].ride) {
+					delete availability[day.date].plan;
+				}
 			}
 		}
 		availability = availability;

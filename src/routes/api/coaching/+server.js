@@ -206,10 +206,11 @@ ${otherProgrammes.map(p => `- ${p.race_name} : ${p.race_date} — ${p.race_dista
 
 ## DISPONIBILITÉS
 Jours disponibles (run = course possible, ride = vélo possible) :
-${trainingDays.map(d => `${d.date}: ${d.run && d.ride ? 'run ou vélo' : d.run ? 'run uniquement' : d.ride ? 'vélo uniquement' : 'REPOS'}`).join('\n')}
+${trainingDays.map(d => `${d.date}: ${d.run && d.ride ? 'run ou vélo' : d.run ? 'run uniquement' : d.ride ? 'vélo uniquement' : 'REPOS OBLIGATOIRE — NE PAS PLANIFIER DE SÉANCE'}`).join('\n')}
 
 ## INSTRUCTIONS
-Génère un plan d'entraînement pour CHAQUE jour disponible (pas les jours de repos ni les jours passés).
+Génère un plan d'entraînement UNIQUEMENT pour les jours marqués "run", "vélo", ou "run ou vélo".
+NE GÉNÈRE AUCUNE SÉANCE pour les jours marqués "REPOS OBLIGATOIRE". Ne les inclus pas du tout dans le JSON.
 Le plan doit être progressif, inclure de la variété (endurance fondamentale, seuil, fractionné, sortie longue, récupération, vélo cross-training).
 Respecte les principes : pas plus de 3 séances intenses par semaine, sortie longue le week-end, repos avant la course.
 Adapte l'intensité au niveau de l'athlète (débutant, intermédiaire, confirmé) basé sur son historique.
@@ -271,10 +272,13 @@ Retourne UNIQUEMENT le JSON.`;
 			return json({ error: 'Erreur de parsing du plan' }, { status: 500 });
 		}
 
-		// 9. Merge plan into availability
+		// 9. Merge plan into availability (skip rest days)
 		const updatedAvailability = { ...avail };
 		for (const [date, plan] of Object.entries(coachingResult.plan || {})) {
-			if (updatedAvailability[date]) {
+			const existing = updatedAvailability[date];
+			// Skip rest days (both run and ride are false)
+			if (existing && !existing.run && !existing.ride) continue;
+			if (existing) {
 				updatedAvailability[date].plan = plan;
 			} else {
 				updatedAvailability[date] = { run: true, ride: true, plan };
