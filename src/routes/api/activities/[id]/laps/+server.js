@@ -23,7 +23,7 @@ export async function POST({ params, platform }) {
 
 	// 3. Get Strava token
 	const { data: user } = await supabase
-		.from('rt_strava_users')
+		.from('rt_users')
 		.select('*')
 		.limit(1)
 		.single();
