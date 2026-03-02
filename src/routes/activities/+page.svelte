@@ -157,6 +157,10 @@
 						{getSportIcon(activity.sport_type)} {activity.sport_type}
 					</span>
 					<span class="activity-name">{activity.name || '—'}</span>
+					{@const actDate = activity.activity_date?.split('T')[0]}
+					{#if actDate && data.plannedDates[actDate]}
+						<span class="plan-badge" title="Séance prévue : {data.plannedDates[actDate].title} ({data.plannedDates[actDate].race})">📋</span>
+					{/if}
 				</div>
 				<div class="col col-dist mono">{formatDistance(activity.distance_m)}</div>
 				<div class="col col-time mono">{formatDuration(activity.moving_time_s)}</div>
@@ -412,6 +416,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+	.plan-badge { font-size: 0.72rem; flex-shrink: 0; cursor: help; }
 
 	.mono {
 		font-family: var(--font-mono);

@@ -78,7 +78,7 @@ export async function POST({ request, platform }) {
 
 	const { data: recentActivities } = await supabase
 		.from('rt_activities')
-		.select('sport_type, name, activity_date, distance_m, moving_time_s, avg_speed_ms, avg_hr, max_hr, elevation_gain, perceived_difficulty, perceived_feeling')
+		.select('sport_type, name, activity_date, distance_m, moving_time_s, avg_speed_ms, avg_hr, max_hr, elevation_gain, perceived_difficulty, perceived_feeling, laps')
 		.gte('activity_date', sixMonthsAgo.toISOString())
 		.order('activity_date', { ascending: false });
 
@@ -137,6 +137,22 @@ export async function POST({ request, platform }) {
 		feeling: a.perceived_feeling || null
 	}));
 
+	// Detail laps for last 5 activities that have them
+	const activitiesWithLaps = last4Weeks
+		.filter(a => a.laps && a.laps.length > 0)
+		.slice(0, 5)
+		.map(a => ({
+			date: a.activity_date?.split('T')[0],
+			name: a.name,
+			sport: a.sport_type,
+			laps: a.laps.map((l, i) => {
+				const pace = l.average_speed > 0 ? (1000 / l.average_speed / 60) : 0;
+				const paceMin = Math.floor(pace);
+				const paceSec = Math.round((pace - paceMin) * 60);
+				return `${l.name || 'Lap ' + (i+1)}: ${(l.distance/1000).toFixed(2)}km, ${paceMin}:${String(paceSec).padStart(2,'0')}/km, FC ${l.average_heartrate ? Math.round(l.average_heartrate) : '?'}bpm`;
+			})
+		}));
+
 	// 6. Build availability summary
 	const avail = programme.availability || {};
 	const todayStr = new Date().toISOString().split('T')[0];
@@ -192,6 +208,10 @@ Analyse l'évolution du poids et de la composition corporelle pour adapter le pl
 
 ## 4 DERNIÈRES SEMAINES (détail)
 ${JSON.stringify(last4WeeksSummary, null, 0)}
+
+${activitiesWithLaps.length > 0 ? `## DÉTAIL DES LAPS (séances récentes avec chronologie)
+${activitiesWithLaps.map(a => `${a.date} — ${a.name} (${a.sport}):\n${a.laps.join('\n')}`).join('\n\n')}
+Utilise ces laps pour comprendre comment l'athlète exécute ses séances (régularité, gestion de l'effort, qualité des fractionnés, etc.).` : ''}
 
 ## OBJECTIF COURSE
 - Course : ${programme.race_name}

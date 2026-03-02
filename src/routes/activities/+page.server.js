@@ -38,7 +38,21 @@ export async function load({ url, platform }) {
 		const { data: activities, count, error } = await query;
 
 		if (error) {
-			return { activities: [], total: 0, page, totalPages: 0, filters: {}, sportTypes: [], error: error.message };
+			return { activities: [], total: 0, page, totalPages: 0, filters: {}, sportTypes: [], plannedDates: {}, error: error.message };
+		}
+
+		// Get planned dates from active programmes
+		const plannedDates = {};
+		const { data: programmes } = await supabaseAdmin
+			.from('rt_programmes')
+			.select('race_name, availability')
+			.eq('active', true);
+
+		for (const prog of (programmes || [])) {
+			const avail = prog.availability || {};
+			for (const [date, val] of Object.entries(avail)) {
+				if (val?.plan) plannedDates[date] = { type: val.plan.type, title: val.plan.title, race: prog.race_name };
+			}
 		}
 
 		// Sport types pour le filtre
@@ -61,9 +75,10 @@ export async function load({ url, platform }) {
 			totalPages: Math.ceil((count || 0) / perPage),
 			filters: { sportType, dateFrom, dateTo, search, sortBy, sortDir },
 			sportTypes,
+			plannedDates,
 			error: null
 		};
 	} catch (err) {
-		return { activities: [], total: 0, page: 1, totalPages: 0, filters: {}, sportTypes: [], error: err.message };
+		return { activities: [], total: 0, page: 1, totalPages: 0, filters: {}, sportTypes: [], plannedDates: {}, error: err.message };
 	}
 }

@@ -7,6 +7,65 @@
 	let saving = false;
 	let savedFeedback = '';
 
+	// Plan prévu
+	let plannedWorkout = data.plannedWorkout;
+	let planRaceName = data.planRaceName;
+
+	// Laps
+	let laps = activity.laps || null;
+	let splits = activity.splits_metric || null;
+	let bestEfforts = activity.best_efforts || null;
+	let lapsLoading = false;
+	let lapsError = '';
+
+	// AI Feedback
+	let aiFeedback = activity.ai_feedback || '';
+	let feedbackLoading = false;
+	let feedbackError = '';
+
+	async function fetchLaps() {
+		if (laps) return;
+		lapsLoading = true;
+		lapsError = '';
+		try {
+			const res = await fetch(`/api/activities/${activity.id}/laps`, { method: 'POST' });
+			const data = await res.json();
+			if (data.error) { lapsError = data.error; return; }
+			laps = data.laps;
+			splits = data.splits_metric;
+			bestEfforts = data.best_efforts;
+		} catch (e) { lapsError = e.message; }
+		finally { lapsLoading = false; }
+	}
+
+	async function fetchFeedback() {
+		feedbackLoading = true;
+		feedbackError = '';
+		try {
+			// Fetch laps first if needed
+			if (!laps) await fetchLaps();
+			const res = await fetch(`/api/activities/${activity.id}/feedback`, { method: 'POST' });
+			const data = await res.json();
+			if (data.error) { feedbackError = data.error; return; }
+			aiFeedback = data.feedback;
+		} catch (e) { feedbackError = e.message; }
+		finally { feedbackLoading = false; }
+	}
+
+	function formatLapPace(speed) {
+		if (!speed || speed <= 0) return '—';
+		const paceTotal = 1000 / speed / 60;
+		const min = Math.floor(paceTotal);
+		const sec = Math.round((paceTotal - min) * 60);
+		return `${min}:${String(sec).padStart(2, '0')}/km`;
+	}
+
+	// Auto-fetch laps on mount if not cached
+	import { onMount } from 'svelte';
+	onMount(() => {
+		if (!laps && activity.strava_id) fetchLaps();
+	});
+
 	// RPE (1-10)
 	let rpe = activity.perceived_difficulty;
 	// Feeling (1-7)
@@ -226,6 +285,123 @@
 			{/if}
 		</div>
 	</div>
+
+	<!-- Plan prévu -->
+	{#if plannedWorkout}
+		<div class="section plan-section">
+			<h2>📋 Séance prévue <span class="plan-race-tag">{planRaceName}</span></h2>
+			<div class="plan-preview">
+				<div class="plan-preview-header">
+					<span class="plan-preview-type" style="color: {plannedWorkout.intensity === 'high' ? 'var(--danger)' : plannedWorkout.intensity === 'moderate' ? 'var(--warning)' : 'var(--success)'}">
+						{plannedWorkout.type === 'easy' ? 'Endurance' : plannedWorkout.type === 'tempo' ? 'Seuil' : plannedWorkout.type === 'intervals' ? 'Fractionné' : plannedWorkout.type === 'long' ? 'Sortie longue' : plannedWorkout.type === 'recovery' ? 'Récup' : plannedWorkout.type}
+					</span>
+					<span class="plan-preview-title">{plannedWorkout.title}</span>
+				</div>
+				<div class="plan-preview-stats">
+					{#if plannedWorkout.duration_min}<span>⏱ {plannedWorkout.duration_min} min prévues</span>{/if}
+					{#if plannedWorkout.distance_km}<span>📏 {plannedWorkout.distance_km} km prévus</span>{/if}
+				</div>
+				{#if plannedWorkout.description}
+					<p class="plan-preview-desc">{plannedWorkout.description}</p>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
+	<!-- AI Feedback -->
+	<div class="section feedback-section">
+		<h2>🤖 Analyse IA</h2>
+		{#if aiFeedback}
+			<div class="ai-feedback-card">
+				<p>{aiFeedback}</p>
+			</div>
+			<button class="btn-refresh-feedback" on:click={fetchFeedback} disabled={feedbackLoading}>
+				{feedbackLoading ? '⏳ Analyse...' : '🔄 Ré-analyser'}
+			</button>
+		{:else}
+			<button class="btn-get-feedback" on:click={fetchFeedback} disabled={feedbackLoading}>
+				{feedbackLoading ? '⏳ Analyse en cours...' : '🤖 Obtenir l\'analyse IA'}
+			</button>
+		{/if}
+		{#if feedbackError}<p class="error-msg">{feedbackError}</p>{/if}
+	</div>
+
+	<!-- Laps -->
+	{#if laps && laps.length > 0}
+		<div class="section laps-section">
+			<h2>🔄 Laps ({laps.length})</h2>
+			<div class="laps-table-wrap">
+				<table class="laps-table">
+					<thead>
+						<tr>
+							<th>#</th>
+							<th>Nom</th>
+							<th>Distance</th>
+							<th>Durée</th>
+							<th>Allure</th>
+							<th>FC</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each laps as lap, i}
+							<tr>
+								<td class="lap-num">{i + 1}</td>
+								<td class="lap-name">{lap.name || '—'}</td>
+								<td>{(lap.distance / 1000).toFixed(2)} km</td>
+								<td>{Math.floor(lap.moving_time / 60)}:{String(Math.round(lap.moving_time % 60)).padStart(2, '0')}</td>
+								<td class="lap-pace">{formatLapPace(lap.average_speed)}</td>
+								<td>{lap.average_heartrate ? Math.round(lap.average_heartrate) + ' bpm' : '—'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	{:else if lapsLoading}
+		<div class="section"><p class="loading-text">⏳ Chargement des laps depuis Strava...</p></div>
+	{:else if lapsError}
+		<div class="section"><p class="error-msg">{lapsError}</p></div>
+	{/if}
+
+	<!-- Splits km -->
+	{#if splits && splits.length > 1}
+		<div class="section">
+			<h2>📊 Splits kilométriques</h2>
+			<div class="splits-bars">
+				{#each splits as s}
+					{@const pace = s.average_speed > 0 ? 1000 / s.average_speed / 60 : 0}
+					{@const paceMin = Math.floor(pace)}
+					{@const paceSec = Math.round((pace - paceMin) * 60)}
+					{@const maxPace = 8}
+					{@const minPace = 4}
+					{@const barPct = Math.max(5, Math.min(100, ((maxPace - pace) / (maxPace - minPace)) * 100))}
+					<div class="split-row">
+						<span class="split-label">Km {s.split}</span>
+						<div class="split-bar-bg">
+							<div class="split-bar" style="width: {barPct}%; background: {pace < 5.5 ? 'var(--danger)' : pace < 6.2 ? 'var(--warning)' : 'var(--success)'}"></div>
+						</div>
+						<span class="split-pace">{paceMin}:{String(paceSec).padStart(2, '0')}</span>
+						{#if s.average_heartrate}<span class="split-hr">{Math.round(s.average_heartrate)}</span>{/if}
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Best efforts -->
+	{#if bestEfforts && bestEfforts.length > 0}
+		<div class="section">
+			<h2>🏅 Meilleurs efforts</h2>
+			<div class="best-efforts">
+				{#each bestEfforts as e}
+					<div class="effort-chip">
+						<span class="effort-name">{e.name}</span>
+						<span class="effort-time">{Math.floor(e.moving_time / 60)}:{String(Math.round(e.moving_time % 60)).padStart(2, '0')}</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
 	<!-- Elevation details -->
 	{#if activity.elevation_low || activity.elevation_high}
@@ -520,5 +696,52 @@
 		.rpe-btn { height: 34px; font-size: 0.75rem; }
 		.feeling-emoji { font-size: 1.1rem; }
 		.feeling-text { display: none; }
+		.laps-table { font-size: 0.72rem; }
 	}
+
+	/* Plan prévu */
+	.plan-section h2 { display: flex; align-items: center; gap: 8px; }
+	.plan-race-tag { font-size: 0.7rem; font-weight: 600; background: var(--accent-glow); color: var(--accent); padding: 2px 8px; border-radius: 10px; }
+	.plan-preview { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; border-left: 3px solid var(--accent); }
+	.plan-preview-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+	.plan-preview-type { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+	.plan-preview-title { font-weight: 600; font-size: 0.88rem; }
+	.plan-preview-stats { display: flex; gap: 12px; font-size: 0.78rem; color: var(--text-secondary); font-family: var(--font-mono); }
+	.plan-preview-desc { font-size: 0.78rem; color: var(--text-muted); line-height: 1.5; margin-top: 6px; }
+
+	/* AI Feedback */
+	.feedback-section { }
+	.ai-feedback-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; border-left: 3px solid #8b5cf6; }
+	.ai-feedback-card p { font-size: 0.82rem; line-height: 1.6; color: var(--text-primary); margin: 0; white-space: pre-line; }
+	.btn-get-feedback, .btn-refresh-feedback { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); cursor: pointer; font-size: 0.82rem; color: var(--text-secondary); transition: all 0.15s; }
+	.btn-get-feedback:hover, .btn-refresh-feedback:hover { border-color: #8b5cf6; color: #8b5cf6; }
+	.btn-get-feedback:disabled, .btn-refresh-feedback:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn-refresh-feedback { margin-top: 8px; font-size: 0.75rem; padding: 5px 12px; }
+	.error-msg { color: var(--danger); font-size: 0.8rem; margin-top: 6px; }
+	.loading-text { color: var(--text-muted); font-size: 0.82rem; }
+
+	/* Laps table */
+	.laps-section { }
+	.laps-table-wrap { overflow-x: auto; }
+	.laps-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+	.laps-table th { text-align: left; padding: 6px 8px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
+	.laps-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); }
+	.lap-num { color: var(--text-muted); font-size: 0.72rem; }
+	.lap-name { color: var(--text-secondary); font-family: var(--font-sans); }
+	.lap-pace { font-weight: 600; }
+
+	/* Splits bars */
+	.splits-bars { display: flex; flex-direction: column; gap: 3px; }
+	.split-row { display: flex; align-items: center; gap: 8px; }
+	.split-label { width: 40px; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); flex-shrink: 0; }
+	.split-bar-bg { flex: 1; height: 18px; background: var(--surface); border-radius: 3px; overflow: hidden; }
+	.split-bar { height: 100%; border-radius: 3px; transition: width 0.3s; }
+	.split-pace { width: 44px; font-size: 0.72rem; font-family: var(--font-mono); font-weight: 600; text-align: right; flex-shrink: 0; }
+	.split-hr { width: 28px; font-size: 0.68rem; font-family: var(--font-mono); color: var(--text-muted); text-align: right; flex-shrink: 0; }
+
+	/* Best efforts */
+	.best-efforts { display: flex; flex-wrap: wrap; gap: 6px; }
+	.effort-chip { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; font-size: 0.78rem; }
+	.effort-name { color: var(--text-secondary); }
+	.effort-time { font-weight: 600; font-family: var(--font-mono); }
 </style>
