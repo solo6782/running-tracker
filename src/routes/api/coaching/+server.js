@@ -254,7 +254,8 @@ Notes sur garmin_steps :
 - Toute séance run DOIT avoir garmin_steps (pas les séances vélo)
 - Commence toujours par un warmup, termine par un cooldown
 - Les allures ne doivent JAMAIS dépasser 6:50/km (contrainte physique de l'athlète)
-- Pour l'endurance fondamentale : warmup 1km + interval principal (distance ou temps) + cooldown 1km
+- Pour l'endurance fondamentale et la récupération : PAS d'échauffement ni de retour au calme (l'allure est déjà faible). Un seul step "interval" avec la distance ou le temps total et éventuellement une cible d'allure.
+- Pour les séances de seuil et sortie longue : warmup 1km + interval principal + cooldown 1km
 - Pour les fractionnés : warmup + repeat(n)[interval + recovery] + cooldown
 
 Retourne UNIQUEMENT le JSON.`;
