@@ -148,6 +148,7 @@ export async function POST({ request, platform }) {
 		duration_min: a.moving_time_s ? Math.round(a.moving_time_s / 60) : 0,
 		avg_hr: a.avg_hr || null,
 		rpe: a.perceived_difficulty || null,
+		feeling: a.perceived_feeling || null
 	}));
 
 	// Detail laps for last 5 activities that have them
@@ -165,8 +166,6 @@ export async function POST({ request, platform }) {
 				return `${l.name || 'Lap ' + (i+1)}: ${(l.distance/1000).toFixed(2)}km, ${paceMin}:${String(paceSec).padStart(2,'0')}/km, FC ${l.average_heartrate ? Math.round(l.average_heartrate) : '?'}bpm`;
 			})
 		}));
-		feeling: a.perceived_feeling || null
-	}));
 
 	// 6. Age
 	let age = null;
