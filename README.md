@@ -1,154 +1,109 @@
-# 🏃 Running Tracker — Guide d'installation
+# GermaClients
 
-Application multi-sport de suivi d'entraînement avec sync automatique Strava.
+Application de suivi de prospection commerciale pour **GERMA Emploi ETTI**.
 
-## Architecture
+## Stack technique
+
+- **Frontend** : React 18 + Vite + Tailwind CSS
+- **Backend** : Supabase (Auth + PostgreSQL + Row Level Security)
+- **Déploiement** : Cloudflare Pages (via GitHub)
+
+## Installation
+
+### 1. Configurer Supabase
+
+1. Créer un projet sur [supabase.com](https://supabase.com)
+2. Aller dans **SQL Editor** et exécuter le contenu de `supabase/schema.sql`
+3. Dans **Authentication > Settings** :
+   - Désactiver "Confirm email" (pour faciliter la création de comptes)
+   - Ou utiliser l'API admin pour créer les utilisateurs
+4. Récupérer l'URL du projet et la clé `anon` dans **Settings > API**
+
+### 2. Configurer les variables d'environnement
+
+Copier `.env.example` en `.env.local` et remplir :
 
 ```
-Garmin (montre) → Strava → Webhook → Cloudflare Worker → Supabase → UI SvelteKit
+VITE_SUPABASE_URL=https://VOTRE_PROJET.supabase.co
+VITE_SUPABASE_ANON_KEY=votre_clé_anon_ici
 ```
 
-## Prérequis
-
-- Node.js 18+
-- Un compte [Cloudflare](https://dash.cloudflare.com) (gratuit)
-- Un compte [Supabase](https://supabase.com) (gratuit)
-- Un compte [Strava](https://www.strava.com) avec des activités
-
----
-
-## Étape 1 — Créer le projet Supabase
-
-1. Va sur [supabase.com](https://supabase.com) → **New Project**
-2. Note ton **Project URL** et ta **anon key** (Settings → API)
-3. Note aussi ta **service_role key** (Settings → API → service_role, **secret**)
-4. Va dans **SQL Editor** et exécute le contenu du fichier `supabase/migration.sql`
-
----
-
-## Étape 2 — Créer l'app Strava
-
-1. Va sur [strava.com/settings/api](https://www.strava.com/settings/api)
-2. Crée une application :
-   - **Application Name** : Running Tracker
-   - **Category** : Training
-   - **Website** : `https://ton-app.pages.dev` (ou `http://localhost:5173` pour le dev)
-   - **Authorization Callback Domain** : `ton-app.pages.dev` (ou `localhost` pour le dev)
-3. Note ton **Client ID** et **Client Secret**
-
----
-
-## Étape 3 — Configuration locale
+### 3. Installer et lancer en local
 
 ```bash
-# Clone ou copie le projet
-cd running-app
-
-# Installe les dépendances
 npm install
-
-# Copie et remplis les variables d'environnement
-cp .env.example .env
-```
-
-Remplis le fichier `.env` :
-```
-PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
-SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
-STRAVA_CLIENT_ID=12345
-STRAVA_CLIENT_SECRET=abcdef...
-STRAVA_WEBHOOK_VERIFY_TOKEN=un-secret-de-ton-choix
-PUBLIC_APP_URL=http://localhost:5173
-```
-
----
-
-## Étape 4 — Lancer en local
-
-```bash
 npm run dev
 ```
 
-Va sur `http://localhost:5173` → clique **Connecter Strava** → autorise → clique **Importer l'historique**.
+### 4. Créer le premier compte direction
 
----
+Option A — via Supabase Dashboard > Authentication > Users > Add User
 
-## Étape 5 — Déployer sur Cloudflare Pages
+Option B — via l'interface de l'app (si la confirmation email est désactivée)
 
-```bash
-# Connecte Wrangler à ton compte Cloudflare
-npx wrangler login
+### 5. Déployer sur Cloudflare Pages
 
-# Déploie
-npm run deploy
-```
+1. Push le code sur GitHub
+2. Dans Cloudflare Pages, connecter le repo GitHub
+3. Paramètres de build :
+   - **Build command** : `npm run build`
+   - **Build output directory** : `dist`
+   - **Environment variables** : ajouter `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`
 
-Ensuite, dans le **dashboard Cloudflare** → Pages → ton projet → Settings → Environment variables :
-Ajoute toutes les variables du `.env` (en tant que secrets pour les clés sensibles).
+### 6. Configurer les variables d'environnement sur Cloudflare
 
-Met à jour `PUBLIC_APP_URL` avec l'URL de ton déploiement (ex: `https://running-tracker.pages.dev`).
-
----
-
-## Étape 6 — Activer le webhook Strava
-
-Le webhook permet la sync automatique des futures activités. Envoie cette requête curl :
-
-```bash
-curl -X POST https://www.strava.com/api/v3/push_subscriptions \
-  -F client_id=TON_CLIENT_ID \
-  -F client_secret=TON_CLIENT_SECRET \
-  -F callback_url=https://ton-app.pages.dev/api/strava/webhook \
-  -F verify_token=ton-verify-token
-```
-
-Strava va appeler ton endpoint GET pour valider, puis commencera à envoyer les événements.
-
----
-
-## Étape 7 — Mettre à jour l'app Strava
-
-Une fois déployé, retourne sur [strava.com/settings/api](https://www.strava.com/settings/api) et mets à jour :
-- **Website** : `https://ton-app.pages.dev`
-- **Authorization Callback Domain** : `ton-app.pages.dev`
-
----
+Dans Cloudflare Pages > Settings > Environment variables, ajouter :
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
 ## Structure du projet
 
 ```
-running-app/
-├── src/
-│   ├── app.html                          # Template HTML
-│   ├── app.css                           # Styles globaux (dark mode)
-│   ├── lib/
-│   │   ├── supabase.js                   # Client Supabase
-│   │   ├── strava.js                     # Helpers API Strava
-│   │   └── format.js                     # Formatage (pace, distance, durée)
-│   └── routes/
-│       ├── +layout.svelte                # Layout racine
-│       ├── +page.svelte                  # Accueil (connexion Strava)
-│       ├── +page.server.js               # Loader serveur
-│       ├── auth/strava/callback/
-│       │   └── +server.js                # OAuth callback Strava
-│       └── api/strava/
-│           ├── import/+server.js         # Import historique
-│           └── webhook/+server.js        # Webhook sync auto
-├── supabase/
-│   └── migration.sql                     # Schéma base de données
+germaclients/
+├── index.html              # Point d'entrée HTML
 ├── package.json
-├── svelte.config.js                      # Config SvelteKit + Cloudflare
 ├── vite.config.js
-├── wrangler.toml                         # Config Cloudflare
-└── .env.example                          # Variables d'environnement
+├── tailwind.config.js
+├── postcss.config.js
+├── .env.example            # Template des variables d'environnement
+├── public/
+│   └── favicon.svg
+├── src/
+│   ├── main.jsx            # Entry point React
+│   ├── App.jsx             # Routing
+│   ├── index.css           # Styles Tailwind + composants
+│   ├── lib/
+│   │   └── supabase.js     # Client Supabase
+│   ├── contexts/
+│   │   └── AuthContext.jsx  # Contexte d'authentification
+│   ├── components/
+│   │   └── Layout.jsx      # Layout avec sidebar + nav mobile
+│   ├── pages/
+│   │   ├── Login.jsx       # Page de connexion
+│   │   ├── Dashboard.jsx   # Tableau de bord avec statistiques
+│   │   ├── Enterprises.jsx # Liste des entreprises + filtres
+│   │   ├── EnterpriseDetail.jsx # Fiche entreprise + historique
+│   │   └── Admin.jsx       # Administration (direction)
+│   └── utils/
+│       └── constants.js    # Constantes, enums, helpers
+└── supabase/
+    └── schema.sql          # Schéma de base de données complet
 ```
 
----
+## Fonctionnalités
 
-## Phases suivantes
+- **Authentification** : login email/mot de passe via Supabase Auth
+- **Dashboard** : KPIs, graphiques (évolution, maturité, par commercial/secteur), relances à venir
+- **Gestion entreprises** : création, modification, filtres, recherche
+- **Historique actions** : horodatage automatique, infalsifiable (RLS)
+- **Conversion prospect → client** : par le commercial, avec traçabilité
+- **Admin** : gestion comptes, secteurs, import Excel, export CSV, backup/restore JSON
+- **Responsive** : fonctionne sur mobile et desktop
 
-- **Phase 2** : Liste des activités avec filtres et saisie du ressenti
-- **Phase 3** : Dashboard avec résumé hebdo/mensuel
-- **Phase 4** : Graphiques d'évolution
-- **Phase 5** : Polish, responsive, gestion d'erreurs
+## Sécurité (RLS)
+
+- Les commerciaux peuvent **voir** toutes les données
+- Les commerciaux peuvent **créer** des entreprises et des actions
+- Les commerciaux **ne peuvent pas** modifier ou supprimer des actions
+- Seule la **direction** peut modifier/supprimer des actions et des entreprises
+- Seule la **direction** a accès à l'administration
