@@ -1,13 +1,8 @@
-name = "running-tracker"
-main = ".svelte-kit/cloudflare/_worker.js"
-compatibility_date = "2024-12-01"
-compatibility_flags = ["nodejs_compat"]
+name = "ai-trick"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
 
-[assets]
-directory = ".svelte-kit/cloudflare"
-
-[vars]
-PUBLIC_APP_URL = "https://running-tracker.solo6782.workers.dev"
-PUBLIC_SUPABASE_URL = "https://denhmucpuksiedfynokm.supabase.co"
-STRAVA_CLIENT_ID = "207049"
-WITHINGS_CLIENT_ID = "e316f0cd0f141dcccd0cde4964fc399352ab4c1f135f49d46c3b5ca0bf55bbeb"
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-trick-db"
+database_id = "5978bdd8-c119-4b65-8aba-715c6eea1835"

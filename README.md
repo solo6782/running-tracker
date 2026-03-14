@@ -1,109 +1,94 @@
-# GermaClients
+# ⚽ ai-trick — Gestion Équipe Junior Hattrick
 
-Application de suivi de prospection commerciale pour **GERMA Emploi ETTI**.
+Outil d'aide à la gestion d'équipe junior Hattrick, propulsé par l'IA (Claude).
+Données persistantes via Cloudflare D1.
 
-## Stack technique
+## Fonctionnalités
 
-- **Frontend** : React 18 + Vite + Tailwind CSS
-- **Backend** : Supabase (Auth + PostgreSQL + Row Level Security)
-- **Déploiement** : Cloudflare Pages (via GitHub)
+- **Import HRF** : Parse les fichiers Hattrick Organizer
+- **Import Rapports** : Rapport entraîneur, compte-rendu, notes détaillées
+- **Tableau des joueurs** : Vue compact + détail avec barres de progression
+- **Composition IA** : Compo optimisée pour la progression (pas pour gagner !)
+- **Recrutement IA** : Analyse des 3 profils scouts hebdomadaires
+- **Promotions IA** : Recommandations de promotion senior
+- **Licenciements IA** : Suggestions si effectif > 14
+- **Plan B** : Alternative avec possibilité d'expliquer le refus
+- **Notes personnalisées** : Enrichir le prompt IA avec tes règles
 
-## Installation
+## Déploiement
 
-### 1. Configurer Supabase
+### Prérequis
+- Compte Cloudflare + Wrangler CLI (`npm i -g wrangler`)
+- Repo GitHub
+- Node.js 18+
 
-1. Créer un projet sur [supabase.com](https://supabase.com)
-2. Aller dans **SQL Editor** et exécuter le contenu de `supabase/schema.sql`
-3. Dans **Authentication > Settings** :
-   - Désactiver "Confirm email" (pour faciliter la création de comptes)
-   - Ou utiliser l'API admin pour créer les utilisateurs
-4. Récupérer l'URL du projet et la clé `anon` dans **Settings > API**
+### Étapes
 
-### 2. Configurer les variables d'environnement
-
-Copier `.env.example` en `.env.local` et remplir :
-
+1. **Créer le repo GitHub** :
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git remote add origin https://github.com/TON_USER/ai-trick.git
+git push -u origin main
 ```
-VITE_SUPABASE_URL=https://VOTRE_PROJET.supabase.co
-VITE_SUPABASE_ANON_KEY=votre_clé_anon_ici
+
+2. **Créer la base D1** :
+```bash
+wrangler d1 create ai-trick-db
+```
+Copie le `database_id` retourné dans `wrangler.toml`.
+
+3. **Exécuter la migration** :
+```bash
+wrangler d1 execute ai-trick-db --remote --file=migrations/0001_init.sql
 ```
 
-### 3. Installer et lancer en local
+4. **Connecter à Cloudflare Pages** :
+   - https://dash.cloudflare.com → Pages → Create a project
+   - Connecte le repo GitHub
+   - Build command : `npm install && npm run build`
+   - Build output directory : `dist`
+   - **D1 binding** : dans Settings > Functions > D1 database bindings :
+     - Variable name : `DB`
+     - D1 database : `ai-trick-db`
+   - Deploy !
+
+5. **Configurer l'app** :
+   - Ouvre l'URL déployée
+   - Paramètres → entre ta clé API Anthropic
+   - Importe ton fichier HRF → c'est parti !
+
+### Développement local
 
 ```bash
 npm install
 npm run dev
 ```
 
-### 4. Créer le premier compte direction
+Pour tester avec D1 local :
+```bash
+wrangler d1 execute ai-trick-db --local --file=migrations/0001_init.sql
+npx wrangler pages dev dist
+```
 
-Option A — via Supabase Dashboard > Authentication > Users > Add User
-
-Option B — via l'interface de l'app (si la confirmation email est désactivée)
-
-### 5. Déployer sur Cloudflare Pages
-
-1. Push le code sur GitHub
-2. Dans Cloudflare Pages, connecter le repo GitHub
-3. Paramètres de build :
-   - **Build command** : `npm run build`
-   - **Build output directory** : `dist`
-   - **Environment variables** : ajouter `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`
-
-### 6. Configurer les variables d'environnement sur Cloudflare
-
-Dans Cloudflare Pages > Settings > Environment variables, ajouter :
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-
-## Structure du projet
+## Structure
 
 ```
-germaclients/
-├── index.html              # Point d'entrée HTML
-├── package.json
-├── vite.config.js
-├── tailwind.config.js
-├── postcss.config.js
-├── .env.example            # Template des variables d'environnement
-├── public/
-│   └── favicon.svg
+├── functions/api/
+│   ├── chat.js        # Proxy API Anthropic
+│   ├── hrf.js         # CRUD données HRF (D1)
+│   ├── reports.js     # CRUD rapports de match (D1)
+│   └── settings.js    # CRUD paramètres (D1)
+├── migrations/
+│   └── 0001_init.sql  # Schéma DB
 ├── src/
-│   ├── main.jsx            # Entry point React
-│   ├── App.jsx             # Routing
-│   ├── index.css           # Styles Tailwind + composants
-│   ├── lib/
-│   │   └── supabase.js     # Client Supabase
-│   ├── contexts/
-│   │   └── AuthContext.jsx  # Contexte d'authentification
-│   ├── components/
-│   │   └── Layout.jsx      # Layout avec sidebar + nav mobile
-│   ├── pages/
-│   │   ├── Login.jsx       # Page de connexion
-│   │   ├── Dashboard.jsx   # Tableau de bord avec statistiques
-│   │   ├── Enterprises.jsx # Liste des entreprises + filtres
-│   │   ├── EnterpriseDetail.jsx # Fiche entreprise + historique
-│   │   └── Admin.jsx       # Administration (direction)
-│   └── utils/
-│       └── constants.js    # Constantes, enums, helpers
-└── supabase/
-    └── schema.sql          # Schéma de base de données complet
+│   ├── components/    # 8 composants React
+│   ├── data/          # Prompt système IA
+│   ├── utils/         # Parser HRF, service IA, storage
+│   ├── App.jsx
+│   ├── index.css
+│   └── main.jsx
+├── wrangler.toml
+└── package.json
 ```
-
-## Fonctionnalités
-
-- **Authentification** : login email/mot de passe via Supabase Auth
-- **Dashboard** : KPIs, graphiques (évolution, maturité, par commercial/secteur), relances à venir
-- **Gestion entreprises** : création, modification, filtres, recherche
-- **Historique actions** : horodatage automatique, infalsifiable (RLS)
-- **Conversion prospect → client** : par le commercial, avec traçabilité
-- **Admin** : gestion comptes, secteurs, import Excel, export CSV, backup/restore JSON
-- **Responsive** : fonctionne sur mobile et desktop
-
-## Sécurité (RLS)
-
-- Les commerciaux peuvent **voir** toutes les données
-- Les commerciaux peuvent **créer** des entreprises et des actions
-- Les commerciaux **ne peuvent pas** modifier ou supprimer des actions
-- Seule la **direction** peut modifier/supprimer des actions et des entreprises
-- Seule la **direction** a accès à l'administration
