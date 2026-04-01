@@ -112,24 +112,33 @@ ${longRuns.map(a => {
 ## VOLUME D'ENTRAÎNEMENT
 - Nombre de runs (6 mois) : ${runActivities.length}
 - Distance totale : ${(runActivities.reduce((s,a) => s + (a.distance_m || 0), 0) / 1000).toFixed(0)} km
+- Semaines restantes avant la course : ${programme.race_date ? Math.max(0, Math.round((new Date(programme.race_date) - new Date()) / (7 * 24 * 60 * 60 * 1000))) : '?'}
 
 ## MÉTHODE D'ESTIMATION
-Utilise plusieurs méthodes croisées :
-1. Extrapolation depuis les courses récentes (Riegel formula: T2 = T1 × (D2/D1)^1.06)
-2. Estimation depuis la VMA déduite du VO2max ou des vitesses d'entraînement
-3. Ajustement pour le dénivelé de la course cible vs les courses passées
-4. Prise en compte du poids, de l'âge, de la FC max, et de la progression récente
-5. Les notes de l'athlète sur ses courses (sensations, problèmes, etc.)
+Donne DEUX estimations séparées :
+
+A) "FORME ACTUELLE" — si l'athlète courait la course demain, sans entraînement supplémentaire.
+   Méthodes : Riegel (T2 = T1 × (D2/D1)^1.06), VMA estimée, ajustement D+, poids/âge.
+
+B) "JOUR DE COURSE" — projection au jour de la course, en tenant compte des gains d'entraînement sur les semaines restantes.
+   Facteurs : nombre de semaines d'entraînement restantes, marge de progression réaliste (typiquement 1-3% sur 5-6 semaines pour un coureur de ce niveau), amélioration de l'endurance spécifique, affûtage pré-course.
 
 ## FORMAT DE RÉPONSE
 Retourne UNIQUEMENT un JSON valide (sans markdown, sans backticks) :
 {
-  "optimistic": "H:MM:SS",
-  "realistic": "H:MM:SS",
-  "conservative": "H:MM:SS",
+  "current": {
+    "optimistic": "H:MM:SS",
+    "realistic": "H:MM:SS",
+    "conservative": "H:MM:SS"
+  },
+  "race_day": {
+    "optimistic": "H:MM:SS",
+    "realistic": "H:MM:SS",
+    "conservative": "H:MM:SS"
+  },
   "target_pace_per_km": "M:SS",
   "confidence": "faible" | "moyenne" | "élevée",
-  "analysis": "Explication en 3-5 phrases de comment tu arrives à cette estimation, les facteurs clés, et les risques.",
+  "analysis": "Explication en 3-5 phrases : forme actuelle, gains projetés, facteurs clés et risques.",
   "strategy": "Conseil de stratégie de course en 2-3 phrases (allure de départ, gestion des km, finish)."
 }`;
 

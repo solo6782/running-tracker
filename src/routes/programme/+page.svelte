@@ -515,7 +515,8 @@
 				predictionError = data.error;
 			} else if (data.success && data.prediction) {
 				predictionData = data.prediction;
-				objectiveTime = data.prediction.realistic;
+				const bestEstimate = data.prediction.race_day?.realistic || data.prediction.realistic;
+				objectiveTime = bestEstimate;
 				objectiveType = 'time';
 				if (programmeId) {
 					availability._prediction = data.prediction;
@@ -523,7 +524,7 @@
 					fetch('/api/programme', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ id: programmeId, objective_type: 'time', objective_time: data.prediction.realistic })
+						body: JSON.stringify({ id: programmeId, objective_type: 'time', objective_time: bestEstimate })
 					});
 				}
 			} else {
@@ -791,9 +792,9 @@
 				{#if objectiveTime && raceDistance}<span class="field-hint">≈ {computePace(objectiveTime, raceDistance)} /km</span>{/if}
 				{#if predictionData}
 					<div class="mini-predictions">
-						<button class="mini-pred" on:click={() => { objectiveTime = predictionData.optimistic; }}>🚀 {predictionData.optimistic}</button>
-						<button class="mini-pred selected" on:click={() => { objectiveTime = predictionData.realistic; }}>🎯 {predictionData.realistic}</button>
-						<button class="mini-pred" on:click={() => { objectiveTime = predictionData.conservative; }}>🛡️ {predictionData.conservative}</button>
+						<button class="mini-pred" on:click={() => { objectiveTime = predictionData.race_day?.optimistic || predictionData.optimistic; }}>🚀 {predictionData.race_day?.optimistic || predictionData.optimistic}</button>
+						<button class="mini-pred selected" on:click={() => { objectiveTime = predictionData.race_day?.realistic || predictionData.realistic; }}>🎯 {predictionData.race_day?.realistic || predictionData.realistic}</button>
+						<button class="mini-pred" on:click={() => { objectiveTime = predictionData.race_day?.conservative || predictionData.conservative; }}>🛡️ {predictionData.race_day?.conservative || predictionData.conservative}</button>
 					</div>
 					{#if predictionData.analysis}
 						<p class="pred-hint">{predictionData.analysis}</p>
@@ -1076,20 +1077,61 @@
 				Confiance {predictionData.confidence}
 			</span>
 		</div>
-		<div class="pred-times">
-			<div class="pred-time optimistic">
-				<span class="pred-label">🚀 Optimiste</span>
-				<span class="pred-value">{predictionData.optimistic}</span>
+
+		{#if predictionData.current}
+			<div class="pred-section-label">🏃 Si tu courais aujourd'hui</div>
+			<div class="pred-times">
+				<div class="pred-time optimistic">
+					<span class="pred-label">🚀 Optimiste</span>
+					<span class="pred-value">{predictionData.current.optimistic}</span>
+				</div>
+				<div class="pred-time realistic">
+					<span class="pred-label">🎯 Réaliste</span>
+					<span class="pred-value">{predictionData.current.realistic}</span>
+				</div>
+				<div class="pred-time conservative">
+					<span class="pred-label">🛡️ Prudent</span>
+					<span class="pred-value">{predictionData.current.conservative}</span>
+				</div>
 			</div>
-			<div class="pred-time realistic">
-				<span class="pred-label">🎯 Réaliste</span>
-				<span class="pred-value">{predictionData.realistic}</span>
+		{/if}
+
+		{#if predictionData.race_day}
+			<div class="pred-section-label">📈 Le jour de la course (avec entraînement)</div>
+			<div class="pred-times">
+				<div class="pred-time optimistic">
+					<span class="pred-label">🚀 Optimiste</span>
+					<span class="pred-value">{predictionData.race_day.optimistic}</span>
+				</div>
+				<div class="pred-time realistic">
+					<span class="pred-label">🎯 Réaliste</span>
+					<span class="pred-value">{predictionData.race_day.realistic}</span>
+				</div>
+				<div class="pred-time conservative">
+					<span class="pred-label">🛡️ Prudent</span>
+					<span class="pred-value">{predictionData.race_day.conservative}</span>
+				</div>
 			</div>
-			<div class="pred-time conservative">
-				<span class="pred-label">🛡️ Prudent</span>
-				<span class="pred-value">{predictionData.conservative}</span>
+		{/if}
+
+		{#if !predictionData.current && !predictionData.race_day}
+			<!-- Backward compat: old format -->
+			<div class="pred-times">
+				<div class="pred-time optimistic">
+					<span class="pred-label">🚀 Optimiste</span>
+					<span class="pred-value">{predictionData.optimistic}</span>
+				</div>
+				<div class="pred-time realistic">
+					<span class="pred-label">🎯 Réaliste</span>
+					<span class="pred-value">{predictionData.realistic}</span>
+				</div>
+				<div class="pred-time conservative">
+					<span class="pred-label">🛡️ Prudent</span>
+					<span class="pred-value">{predictionData.conservative}</span>
+				</div>
 			</div>
-		</div>
+		{/if}
+
 		{#if predictionData.target_pace_per_km}
 			<div class="pred-pace">Allure cible : <strong>{predictionData.target_pace_per_km}/km</strong></div>
 		{/if}
@@ -1099,7 +1141,7 @@
 				<p class="pred-strategy">💡 {predictionData.strategy}</p>
 			{/if}
 		</div>
-		<button class="an-refresh" on:click={generatePrediction} disabled={predicting}>
+		<button type="button" class="an-refresh" on:click={estimateObjective} disabled={predicting}>
 			{#if predicting}<span class="spinner-sm"></span>{:else}🔄{/if} Actualiser la prédiction
 		</button>
 	{:else}
@@ -1453,6 +1495,7 @@
 	.pred-confidence.orange { background: rgba(234,179,8,0.15); color: #eab308; }
 	.pred-confidence.red { background: rgba(239,68,68,0.15); color: #ef4444; }
 	.pred-times { display: flex; gap: 10px; margin-bottom: 14px; }
+	.pred-section-label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin: 12px 0 6px; }
 	.pred-time { flex: 1; padding: 12px; border-radius: var(--radius-md); text-align: center; }
 	.pred-time.optimistic { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); }
 	.pred-time.realistic { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); }
