@@ -496,6 +496,19 @@
 		await generatePrediction();
 		if (predictionData?.realistic) {
 			objectiveTime = predictionData.realistic;
+			objectiveType = 'time';
+			// Save to DB
+			if (programmeId) {
+				fetch('/api/programme', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						id: programmeId,
+						objective_type: 'time',
+						objective_time: predictionData.realistic
+					})
+				});
+			}
 		}
 	}
 
@@ -873,6 +886,9 @@
 			{:else}
 				<span class="race-tag goal">🏁 Finir</span>
 			{/if}
+			<button class="race-tag estimate-tag" on:click={estimateObjective} disabled={predicting}>
+				{predicting ? '⏳...' : '🎯 Estimer'}
+			</button>
 		</div>
 	</div>
 	<div class="header-actions">
@@ -1441,4 +1457,9 @@
 	.mini-pred:hover { border-color: var(--accent); color: var(--accent-light); }
 	.mini-pred.selected { border-color: var(--accent); background: var(--accent-glow); color: var(--accent-light); font-weight: 600; }
 	.pred-hint { font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; margin-top: 8px; font-style: italic; }
+
+	/* Estimate tag in header */
+	.estimate-tag { cursor: pointer; background: rgba(249,115,22,0.12); color: #f97316; border: 1px solid rgba(249,115,22,0.3); transition: all 0.15s; }
+	.estimate-tag:hover { background: rgba(249,115,22,0.25); }
+	.estimate-tag:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
