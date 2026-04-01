@@ -85,11 +85,28 @@ export async function POST({ params, platform }) {
 	if (!zones) {
 		const { data: profile } = await supabase
 			.from('rt_profile')
-			.select('date_of_birth')
+			.select('date_of_birth, max_hr')
 			.limit(1)
 			.single();
 
-		let maxHR = activity.max_hr || 190;
+		// Use profile max HR, or find highest across all activities, or estimate from age
+		let maxHR = profile?.max_hr || 190;
+
+		if (!profile?.max_hr) {
+			// Find the highest max_hr across all activities
+			const { data: hrRecord } = await supabase
+				.from('rt_activities')
+				.select('max_hr')
+				.not('max_hr', 'is', null)
+				.order('max_hr', { ascending: false })
+				.limit(1)
+				.single();
+
+			if (hrRecord?.max_hr) {
+				maxHR = hrRecord.max_hr;
+			}
+		}
+
 		if (profile?.date_of_birth) {
 			const age = Math.floor((Date.now() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
 			maxHR = Math.max(maxHR, 220 - age);
