@@ -27,7 +27,7 @@ export async function GET({ url, platform }) {
 	if (user) {
 		try {
 			const accessToken = await getValidToken(user, env.STRAVA_CLIENT_ID, env.STRAVA_CLIENT_SECRET, supabase);
-			const stravaRes = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=5', {
+			const stravaRes = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=30', {
 				headers: { 'Authorization': `Bearer ${accessToken}` }
 			});
 			const recentStrava = await stravaRes.json();
@@ -95,7 +95,7 @@ export async function POST({ request, platform }) {
 
 		const accessToken = await getValidToken(user, env.STRAVA_CLIENT_ID, env.STRAVA_CLIENT_SECRET, supabase);
 
-		const stravaRes = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=10', {
+		const stravaRes = await fetch('https://www.strava.com/api/v3/athlete/activities?per_page=30', {
 			headers: { 'Authorization': `Bearer ${accessToken}` }
 		});
 		const activities = await stravaRes.json();
