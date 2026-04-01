@@ -492,6 +492,13 @@
 		finally { predicting = false; }
 	}
 
+	async function estimateObjective() {
+		await generatePrediction();
+		if (predictionData?.realistic) {
+			objectiveTime = predictionData.realistic;
+		}
+	}
+
 	// === HELPERS ===
 	const distances = [
 		{ label: '5K', value: 5 }, { label: '10K', value: 10 },
@@ -738,8 +745,24 @@
 				<button class="obj-btn" class:active={objectiveType === 'time'} on:click={() => objectiveType = 'time'}>⏱️ Temps cible</button>
 			</div>
 			{#if objectiveType === 'time'}
-				<input type="text" bind:value={objectiveTime} placeholder="Ex: 1:45:00" />
+				<div class="objective-row">
+					<input type="text" bind:value={objectiveTime} placeholder="Ex: 1:45:00" />
+					<button class="btn-estimate" on:click={estimateObjective} disabled={predicting || !programmeId}>
+						{predicting ? '⏳' : '🎯'} Estimer
+					</button>
+				</div>
 				{#if objectiveTime && raceDistance}<span class="field-hint">≈ {computePace(objectiveTime, raceDistance)} /km</span>{/if}
+				{#if predictionData}
+					<div class="mini-predictions">
+						<button class="mini-pred" on:click={() => { objectiveTime = predictionData.optimistic; }}>🚀 {predictionData.optimistic}</button>
+						<button class="mini-pred selected" on:click={() => { objectiveTime = predictionData.realistic; }}>🎯 {predictionData.realistic}</button>
+						<button class="mini-pred" on:click={() => { objectiveTime = predictionData.conservative; }}>🛡️ {predictionData.conservative}</button>
+					</div>
+					{#if predictionData.analysis}
+						<p class="pred-hint">{predictionData.analysis}</p>
+					{/if}
+				{/if}
+				{#if predictionError}<span class="field-hint" style="color: var(--danger)">{predictionError}</span>{/if}
 			{/if}
 		</div>
 
@@ -1406,4 +1429,16 @@
 	.btn-prediction { background: linear-gradient(135deg, #f97316, #eab308); border: none; border-radius: var(--radius-md); color: white; font-size: 0.9rem; font-weight: 600; padding: 12px 24px; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
 	.btn-prediction:hover { opacity: 0.9; }
 	.btn-prediction:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	/* Estimate objective */
+	.objective-row { display: flex; gap: 8px; align-items: center; }
+	.objective-row input { flex: 1; }
+	.btn-estimate { padding: 8px 14px; border: 1px solid var(--accent); border-radius: var(--radius-md); background: var(--accent-glow); color: var(--accent-light); font-weight: 600; font-size: 0.82rem; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+	.btn-estimate:hover { background: var(--accent); color: white; }
+	.btn-estimate:disabled { opacity: 0.5; cursor: not-allowed; }
+	.mini-predictions { display: flex; gap: 6px; margin-top: 6px; }
+	.mini-pred { padding: 4px 10px; border: 1px solid var(--border); border-radius: 20px; background: transparent; color: var(--text-secondary); font-size: 0.75rem; font-family: var(--font-mono); cursor: pointer; transition: all 0.15s; }
+	.mini-pred:hover { border-color: var(--accent); color: var(--accent-light); }
+	.mini-pred.selected { border-color: var(--accent); background: var(--accent-glow); color: var(--accent-light); font-weight: 600; }
+	.pred-hint { font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; margin-top: 8px; font-style: italic; }
 </style>
