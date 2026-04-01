@@ -498,22 +498,41 @@
 	}
 
 	async function estimateObjective() {
-		await generatePrediction();
-		if (predictionData?.realistic) {
-			objectiveTime = predictionData.realistic;
-			objectiveType = 'time';
-			// Save to DB
-			if (programmeId) {
-				fetch('/api/programme', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						id: programmeId,
-						objective_type: 'time',
-						objective_time: predictionData.realistic
-					})
-				});
+		predicting = true;
+		predictionError = '';
+		try {
+			const payload = programmeId
+				? { programmeId }
+				: { race_name: raceName, race_date: raceDate, race_distance_km: parseFloat(raceDistance) || 21.1, race_elevation_gain: raceElevation ? parseInt(raceElevation) : null, race_profile: raceProfile || '', objective_type: objectiveType, objective_time: objectiveTime };
+
+			const res = await fetch('/api/coaching/prediction', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			const data = await res.json();
+			if (data.error) {
+				predictionError = data.error;
+			} else if (data.success && data.prediction) {
+				predictionData = data.prediction;
+				objectiveTime = data.prediction.realistic;
+				objectiveType = 'time';
+				if (programmeId) {
+					availability._prediction = data.prediction;
+					saveAvailability();
+					fetch('/api/programme', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ id: programmeId, objective_type: 'time', objective_time: data.prediction.realistic })
+					});
+				}
+			} else {
+				predictionError = 'Réponse inattendue du serveur';
 			}
+		} catch (err) {
+			predictionError = err.message || 'Erreur de connexion';
+		} finally {
+			predicting = false;
 		}
 	}
 
@@ -765,7 +784,7 @@
 			{#if objectiveType === 'time'}
 				<div class="objective-row">
 					<input type="text" bind:value={objectiveTime} placeholder="Ex: 1:45:00" />
-					<button class="btn-estimate" on:click={estimateObjective} disabled={predicting}>
+					<button type="button" class="btn-estimate" on:click={estimateObjective} disabled={predicting}>
 						{predicting ? '⏳' : '🎯'} Estimer
 					</button>
 				</div>
@@ -891,7 +910,7 @@
 			{:else}
 				<span class="race-tag goal">🏁 Finir</span>
 			{/if}
-			<button class="race-tag estimate-tag" on:click={estimateObjective} disabled={predicting}>
+			<button type="button" class="race-tag estimate-tag" on:click={estimateObjective} disabled={predicting}>
 				{predicting ? '⏳...' : '🎯 Estimer'}
 			</button>
 		</div>
