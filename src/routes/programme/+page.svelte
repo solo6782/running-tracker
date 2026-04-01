@@ -197,12 +197,15 @@
 			analysisData = null;
 		}
 
-		// Load coaching summary from plan if present
-		const plans = Object.entries(availability).filter(([k, v]) => k !== '_ai_analysis' && v?.plan);
-		if (plans.length > 0) {
-			coachingSummary = ''; coachingLevel = ''; coachingVolume = '';
+		// Load coaching summary from saved meta
+		if (availability._coaching_meta) {
+			coachingSummary = availability._coaching_meta.summary || '';
+			coachingLevel = availability._coaching_meta.level || '';
+			coachingVolume = availability._coaching_meta.volume || '';
 		} else {
-			coachingSummary = ''; coachingLevel = ''; coachingVolume = '';
+			coachingSummary = '';
+			coachingLevel = '';
+			coachingVolume = '';
 		}
 	}
 
@@ -428,6 +431,13 @@
 				coachingSummary = data.summary;
 				coachingLevel = data.level;
 				coachingVolume = data.weekly_volume_target;
+				// Save coaching meta for persistence
+				availability._coaching_meta = {
+					summary: data.summary,
+					level: data.level,
+					volume: data.weekly_volume_target
+				};
+				saveAvailability();
 			}
 		} catch (err) { coachingError = err.message; }
 		finally { generating = false; }
