@@ -70,6 +70,7 @@ FC max : ${activity.max_hr || '?'} bpm
 D+ : ${activity.elevation_gain || 0} m
 RPE ressenti : ${activity.perceived_difficulty ? activity.perceived_difficulty + '/10' : 'non renseigné'}
 Feeling : ${activity.perceived_feeling ? activity.perceived_feeling + '/7' : 'non renseigné'}
+${activity.user_notes ? `Notes de l'athlète : "${activity.user_notes}"` : ''}
 
 ## LAPS (détail de la séance)
 ${lapsText}
@@ -93,6 +94,7 @@ ${plannedWorkout ? `Compare ce qui était prévu vs ce qui a été réalisé (di
 Analyse les laps pour comprendre la structure de la séance (régularité, gestion de l'effort, etc.).
 Mentionne un point positif et éventuellement un axe d'amélioration.
 Si le RPE ou feeling est renseigné, commente la cohérence entre données objectives et ressenti.
+Si l'athlète a laissé des notes, prends-les en compte dans ton analyse.
 Ne commence pas par "Bravo" ou des félicitations creuses. Sois factuel et constructif.`;
 
 	try {

@@ -3,6 +3,7 @@
 
 ALTER TABLE rt_activities ADD COLUMN IF NOT EXISTS streams JSONB;
 ALTER TABLE rt_activities ADD COLUMN IF NOT EXISTS hr_zones JSONB;
+ALTER TABLE rt_activities ADD COLUMN IF NOT EXISTS user_notes TEXT;
 
 -- Also add the activity detail columns if not already done
 ALTER TABLE rt_activities ADD COLUMN IF NOT EXISTS laps JSONB;

@@ -52,6 +52,11 @@ export async function PATCH({ params, request, platform }) {
 			updates.perceived_feeling = feeling;
 		}
 
+		// User notes (free text)
+		if (body.user_notes !== undefined) {
+			updates.user_notes = body.user_notes || null;
+		}
+
 		if (Object.keys(updates).length === 0) {
 			return json({ success: false, error: 'No valid fields to update' }, { status: 400 });
 		}
@@ -60,7 +65,7 @@ export async function PATCH({ params, request, platform }) {
 			.from('rt_activities')
 			.update(updates)
 			.eq('id', params.id)
-			.select('id, perceived_difficulty, perceived_feeling')
+			.select('id, perceived_difficulty, perceived_feeling, user_notes')
 			.single();
 
 		if (error) {

@@ -76,7 +76,7 @@ export async function POST({ request, platform }) {
 
 	const { data: recentActivities } = await supabase
 		.from('rt_activities')
-		.select('sport_type, name, activity_date, distance_m, moving_time_s, avg_speed_ms, avg_hr, max_hr, elevation_gain, perceived_difficulty, perceived_feeling, laps, hr_zones')
+		.select('sport_type, name, activity_date, distance_m, moving_time_s, avg_speed_ms, avg_hr, max_hr, elevation_gain, perceived_difficulty, perceived_feeling, user_notes, laps, hr_zones')
 		.gte('activity_date', sixMonthsAgo.toISOString())
 		.order('activity_date', { ascending: false });
 
@@ -148,7 +148,8 @@ export async function POST({ request, platform }) {
 		duration_min: a.moving_time_s ? Math.round(a.moving_time_s / 60) : 0,
 		avg_hr: a.avg_hr || null,
 		rpe: a.perceived_difficulty || null,
-		feeling: a.perceived_feeling || null
+		feeling: a.perceived_feeling || null,
+		notes: a.user_notes || null
 	}));
 
 	// Detail laps for last 5 activities that have them
@@ -222,6 +223,10 @@ ${JSON.stringify(withingsHistory, null, 0)}` : ''}
 
 ## 4 DERNIÈRES SEMAINES (détail séance par séance)
 ${JSON.stringify(last4WeeksSummary, null, 0)}
+
+${last4Weeks.filter(a => a.user_notes).length > 0 ? `## COMMENTAIRES DE L'ATHLÈTE
+${last4Weeks.filter(a => a.user_notes).map(a => `${a.activity_date?.split('T')[0]} — ${a.name}: "${a.user_notes}"`).join('\n')}
+Prends en compte ces commentaires pour ton analyse (douleurs, fatigue, contraintes, motivations).` : ''}
 
 ${activitiesWithLaps.length > 0 ? `## DÉTAIL DES LAPS (séances récentes avec chronologie)
 ${activitiesWithLaps.map(a => `${a.date} — ${a.name} (${a.sport}):\n${a.laps.join('\n')}`).join('\n\n')}

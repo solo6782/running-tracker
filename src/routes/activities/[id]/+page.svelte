@@ -144,6 +144,10 @@
 	let rpe = activity.perceived_difficulty;
 	// Feeling (1-7)
 	let feeling = activity.perceived_feeling;
+	// User notes
+	let userNotes = activity.user_notes || '';
+	let notesTimer = null;
+	let notesSaved = '';
 
 	const rpeLabels = ['', 'Repos', 'Très facile', 'Facile', 'Modéré-', 'Modéré', 'Modéré+', 'Difficile', 'Très difficile', 'Extrême', 'Maximum'];
 	const feelingLabels = ['', 'Terrible', 'Mauvais', 'Moyen', 'OK', 'Bien', 'Très bien', 'Excellent'];
@@ -188,6 +192,25 @@
 	function setFeeling(val) {
 		feeling = val;
 		savePerception();
+	}
+
+	function onNotesInput() {
+		notesSaved = '';
+		if (notesTimer) clearTimeout(notesTimer);
+		notesTimer = setTimeout(async () => {
+			try {
+				const res = await fetch(`/api/activities/${activity.id}`, {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_notes: userNotes })
+				});
+				const result = await res.json();
+				if (result.success) {
+					notesSaved = '✓';
+					setTimeout(() => { notesSaved = ''; }, 2000);
+				}
+			} catch (e) { notesSaved = 'Erreur'; }
+		}, 1000);
 	}
 
 	// Stat helpers
@@ -390,6 +413,18 @@
 				<span class="save-feedback">{savedFeedback}</span>
 			{/if}
 		</div>
+	</div>
+
+	<!-- Notes personnelles -->
+	<div class="section notes-section">
+		<h2>📝 Notes <span class="notes-saved">{notesSaved}</span></h2>
+		<textarea
+			class="notes-input"
+			placeholder="Ajoute un commentaire sur ta séance (sensations, contexte, météo, objectifs...)..."
+			bind:value={userNotes}
+			on:input={onNotesInput}
+			rows="3"
+		></textarea>
 	</div>
 
 	<!-- Plan prévu -->
@@ -1063,6 +1098,37 @@
 
 	/* HR Zones */
 	.zones-section { margin-bottom: 28px; }
+
+	/* Notes */
+	.notes-section { }
+	.notes-section h2 { display: flex; align-items: center; gap: 8px; }
+	.notes-saved {
+		font-size: 0.72rem;
+		color: var(--success);
+		font-family: var(--font-mono);
+	}
+	.notes-input {
+		width: 100%;
+		min-height: 70px;
+		padding: 12px 14px;
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		color: var(--text-primary);
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		line-height: 1.5;
+		resize: vertical;
+		transition: border-color 0.15s;
+	}
+	.notes-input::placeholder {
+		color: var(--text-muted);
+		font-style: italic;
+	}
+	.notes-input:focus {
+		outline: none;
+		border-color: var(--accent);
+	}
 	.zones-bar {
 		display: flex;
 		height: 28px;
