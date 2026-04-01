@@ -50,6 +50,11 @@
 	let analysisData = null;
 	let analysisError = '';
 
+	// Prediction
+	let predicting = false;
+	let predictionData = null;
+	let predictionError = '';
+
 	// Withings
 	let withingsConnected = false;
 	let withingsLatest = {};
@@ -206,6 +211,13 @@
 			coachingSummary = '';
 			coachingLevel = '';
 			coachingVolume = '';
+		}
+
+		// Load prediction
+		if (availability._prediction) {
+			predictionData = availability._prediction;
+		} else {
+			predictionData = null;
 		}
 	}
 
@@ -380,7 +392,7 @@
 			raceLocation = ''; raceElevation = null; raceProfile = ''; raceUrl = '';
 			objectiveType = 'finish'; objectiveTime = '';
 			searchResult = null; coachingSummary = ''; coachingLevel = '';
-			analysisData = null;
+			analysisData = null; predictionData = null;
 		}
 	}
 
@@ -458,6 +470,26 @@
 			}
 		} catch (err) { analysisError = err.message; }
 		finally { analyzing = false; }
+	}
+
+	async function generatePrediction() {
+		if (!programmeId) return;
+		predicting = true; predictionError = '';
+		try {
+			const res = await fetch('/api/coaching/prediction', {
+				method: 'POST', headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ programmeId })
+			});
+			const data = await res.json();
+			if (data.error) { predictionError = data.error; }
+			else if (data.success) {
+				predictionData = data.prediction;
+				// Save for persistence
+				availability._prediction = data.prediction;
+				saveAvailability();
+			}
+		} catch (err) { predictionError = err.message; }
+		finally { predicting = false; }
 	}
 
 	// === HELPERS ===
@@ -971,6 +1003,54 @@
 	{/if}
 </div>
 
+<!-- Prediction Card -->
+<div class="prediction-card">
+	{#if predictionData}
+		<div class="pred-header">
+			<span>🎯</span>
+			<strong>Prédiction de temps</strong>
+			<span class="pred-confidence" class:green={predictionData.confidence === 'élevée'} class:orange={predictionData.confidence === 'moyenne'} class:red={predictionData.confidence === 'faible'}>
+				Confiance {predictionData.confidence}
+			</span>
+		</div>
+		<div class="pred-times">
+			<div class="pred-time optimistic">
+				<span class="pred-label">🚀 Optimiste</span>
+				<span class="pred-value">{predictionData.optimistic}</span>
+			</div>
+			<div class="pred-time realistic">
+				<span class="pred-label">🎯 Réaliste</span>
+				<span class="pred-value">{predictionData.realistic}</span>
+			</div>
+			<div class="pred-time conservative">
+				<span class="pred-label">🛡️ Prudent</span>
+				<span class="pred-value">{predictionData.conservative}</span>
+			</div>
+		</div>
+		{#if predictionData.target_pace_per_km}
+			<div class="pred-pace">Allure cible : <strong>{predictionData.target_pace_per_km}/km</strong></div>
+		{/if}
+		<div class="pred-analysis">
+			<p>{predictionData.analysis}</p>
+			{#if predictionData.strategy}
+				<p class="pred-strategy">💡 {predictionData.strategy}</p>
+			{/if}
+		</div>
+		<button class="an-refresh" on:click={generatePrediction} disabled={predicting}>
+			{#if predicting}<span class="spinner-sm"></span>{:else}🔄{/if} Actualiser la prédiction
+		</button>
+	{:else}
+		<button class="btn-prediction" on:click={generatePrediction} disabled={predicting}>
+			{#if predicting}
+				<span class="spinner"></span> Calcul en cours...
+			{:else}
+				🎯 Estimer mon temps de course
+			{/if}
+		</button>
+		{#if predictionError}<div class="coaching-error">{predictionError}</div>{/if}
+	{/if}
+</div>
+
 <!-- VERTICAL CALENDAR -->
 <div class="v-calendar">
 	{#each calendarDays as day, i}
@@ -1301,4 +1381,29 @@
 	.btn-analysis { background: linear-gradient(135deg, #8b5cf6, #06b6d4); border: none; border-radius: var(--radius-md); color: white; font-size: 0.9rem; font-weight: 600; padding: 12px 24px; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
 	.btn-analysis:hover { opacity: 0.9; }
 	.btn-analysis:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	/* Prediction */
+	.prediction-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; }
+	.pred-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 0.95rem; }
+	.pred-confidence { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+	.pred-confidence.green { background: rgba(34,197,94,0.15); color: #22c55e; }
+	.pred-confidence.orange { background: rgba(234,179,8,0.15); color: #eab308; }
+	.pred-confidence.red { background: rgba(239,68,68,0.15); color: #ef4444; }
+	.pred-times { display: flex; gap: 10px; margin-bottom: 14px; }
+	.pred-time { flex: 1; padding: 12px; border-radius: var(--radius-md); text-align: center; }
+	.pred-time.optimistic { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); }
+	.pred-time.realistic { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); }
+	.pred-time.conservative { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); }
+	.pred-label { display: block; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 4px; }
+	.pred-value { font-family: var(--font-mono); font-size: 1.2rem; font-weight: 700; }
+	.pred-time.optimistic .pred-value { color: #22c55e; }
+	.pred-time.realistic .pred-value { color: #3b82f6; }
+	.pred-time.conservative .pred-value { color: #eab308; }
+	.pred-pace { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px; text-align: center; font-family: var(--font-mono); }
+	.pred-analysis { font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary); }
+	.pred-analysis p { margin: 0 0 8px; }
+	.pred-strategy { color: var(--accent-light); font-style: italic; }
+	.btn-prediction { background: linear-gradient(135deg, #f97316, #eab308); border: none; border-radius: var(--radius-md); color: white; font-size: 0.9rem; font-weight: 600; padding: 12px 24px; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+	.btn-prediction:hover { opacity: 0.9; }
+	.btn-prediction:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

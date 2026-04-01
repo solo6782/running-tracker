@@ -256,7 +256,9 @@ Le plan doit être progressif, inclure de la variété (endurance fondamentale, 
 Respecte les principes : pas plus de 3 séances intenses par semaine, sortie longue le week-end, repos avant la course.
 Adapte l'intensité au niveau de l'athlète (débutant, intermédiaire, confirmé) basé sur son historique.
 
-CONTRAINTE ALLURE IMPORTANTE : L'athlète ne peut physiquement pas courir en dessous de 6:50/km (même en endurance fondamentale). Ne prescris JAMAIS d'allure supérieure à 6:50/km. L'endurance fondamentale doit être entre 6:20 et 6:50/km, la récupération entre 6:30 et 6:50/km.
+CONTRAINTE ALLURE IMPORTANTE : L'athlète ne peut physiquement pas courir en dessous de 6:40/km (même en endurance fondamentale). Ne prescris JAMAIS d'allure supérieure à 6:40/km. L'endurance fondamentale doit être entre 6:10 et 6:40/km, la récupération entre 6:20 et 6:40/km.
+
+CONTRAINTE DURÉE : Les jours de semaine, l'athlète a au maximum 1h pour courir. Les séances longues (>1h) doivent IMPÉRATIVEMENT être placées le weekend (samedi ou dimanche).
 
 Pour chaque séance de course, inclus un champ "garmin_steps" avec les étapes structurées pour export Garmin.
 Chaque étape a : step_type ("warmup", "interval", "cooldown", "recovery"), end_type ("time" ou "distance"), end_value (secondes ou mètres), et optionnellement pace_target avec min_per_km et max_per_km (ex: "6:00" et "6:30").
@@ -292,7 +294,7 @@ Retourne UNIQUEMENT un JSON valide (sans markdown, sans backticks) avec cette st
 Notes sur garmin_steps :
 - Toute séance run DOIT avoir garmin_steps (pas les séances vélo)
 - Commence toujours par un warmup, termine par un cooldown
-- Les allures ne doivent JAMAIS dépasser 6:50/km (contrainte physique de l'athlète)
+- Les allures ne doivent JAMAIS dépasser 6:40/km (contrainte physique de l'athlète)
 - Pour l'endurance fondamentale et la récupération : PAS d'échauffement ni de retour au calme (l'allure est déjà faible). Un seul step "interval" avec la distance ou le temps total et éventuellement une cible d'allure.
 - Pour les séances de seuil et sortie longue : warmup 1km + interval principal + cooldown 1km
 - Pour les fractionnés : warmup + repeat(n)[interval + recovery] + cooldown
