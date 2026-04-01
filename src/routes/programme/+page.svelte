@@ -478,15 +478,20 @@
 		try {
 			const res = await fetch('/api/coaching/prediction', {
 				method: 'POST', headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ programmeId })
+				body: JSON.stringify(programmeId
+					? { programmeId }
+					: { race_name: raceName, race_date: raceDate, race_distance_km: raceDistance, race_elevation_gain: raceElevation, race_profile: raceProfile, objective_type: objectiveType, objective_time: objectiveTime }
+				)
 			});
 			const data = await res.json();
 			if (data.error) { predictionError = data.error; }
 			else if (data.success) {
 				predictionData = data.prediction;
-				// Save for persistence
-				availability._prediction = data.prediction;
-				saveAvailability();
+				// Save for persistence if programme exists
+				if (programmeId) {
+					availability._prediction = data.prediction;
+					saveAvailability();
+				}
 			}
 		} catch (err) { predictionError = err.message; }
 		finally { predicting = false; }
@@ -760,7 +765,7 @@
 			{#if objectiveType === 'time'}
 				<div class="objective-row">
 					<input type="text" bind:value={objectiveTime} placeholder="Ex: 1:45:00" />
-					<button class="btn-estimate" on:click={estimateObjective} disabled={predicting || !programmeId}>
+					<button class="btn-estimate" on:click={estimateObjective} disabled={predicting}>
 						{predicting ? '⏳' : '🎯'} Estimer
 					</button>
 				</div>

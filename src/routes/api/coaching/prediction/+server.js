@@ -4,17 +4,32 @@ import { getEnv } from '$lib/env.js';
 
 export async function POST({ request, platform }) {
 	const env = getEnv(platform);
-	const { programmeId } = await request.json();
+	const body = await request.json();
 	const supabase = createServerClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
 
-	// 1. Get programme
-	const { data: programme } = await supabase
-		.from('rt_programmes')
-		.select('*')
-		.eq('id', programmeId)
-		.single();
+	// 1. Get programme data - from DB or from request body
+	let programme;
+	if (body.programmeId) {
+		const { data } = await supabase
+			.from('rt_programmes')
+			.select('*')
+			.eq('id', body.programmeId)
+			.single();
+		programme = data;
+	}
 
-	if (!programme) return json({ error: 'Programme introuvable' }, { status: 404 });
+	if (!programme) {
+		// Use direct race details from request
+		programme = {
+			race_name: body.race_name || 'Course',
+			race_date: body.race_date || '',
+			race_distance_km: body.race_distance_km || 21.1,
+			race_elevation_gain: body.race_elevation_gain || null,
+			race_profile: body.race_profile || '',
+			objective_type: body.objective_type || 'finish',
+			objective_time: body.objective_time || ''
+		};
+	}
 
 	// 2. Get profile
 	const { data: profile } = await supabase
