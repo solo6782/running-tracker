@@ -76,7 +76,7 @@ export async function POST({ request, platform }) {
 
 	const { data: recentActivities } = await supabase
 		.from('rt_activities')
-		.select('sport_type, name, activity_date, distance_m, moving_time_s, avg_speed_ms, avg_hr, max_hr, elevation_gain, perceived_difficulty, perceived_feeling, laps')
+		.select('sport_type, name, activity_date, distance_m, moving_time_s, avg_speed_ms, avg_hr, max_hr, elevation_gain, perceived_difficulty, perceived_feeling, laps, hr_zones')
 		.gte('activity_date', sixMonthsAgo.toISOString())
 		.order('activity_date', { ascending: false });
 
@@ -167,6 +167,16 @@ export async function POST({ request, platform }) {
 			})
 		}));
 
+	// HR zones summary
+	const activitiesWithZones = last4Weeks
+		.filter(a => a.hr_zones && a.hr_zones.length > 0)
+		.slice(0, 5)
+		.map(a => ({
+			date: a.activity_date?.split('T')[0],
+			name: a.name,
+			zones: a.hr_zones.map(z => `Z${z.zone}(${z.label}): ${z.pct}%`).join(', ')
+		}));
+
 	// 6. Age
 	let age = null;
 	if (profile?.date_of_birth) {
@@ -216,6 +226,10 @@ ${JSON.stringify(last4WeeksSummary, null, 0)}
 ${activitiesWithLaps.length > 0 ? `## DÉTAIL DES LAPS (séances récentes avec chronologie)
 ${activitiesWithLaps.map(a => `${a.date} — ${a.name} (${a.sport}):\n${a.laps.join('\n')}`).join('\n\n')}
 Utilise ces laps pour évaluer la qualité d'exécution des séances (régularité, gestion de l'effort, tenue des allures).` : ''}
+
+${activitiesWithZones.length > 0 ? `## ZONES FC (séances récentes)
+${activitiesWithZones.map(a => `${a.date} — ${a.name}: ${a.zones}`).join('\n')}
+Vérifie que les endurances fondamentales sont bien faites en Z1-Z2. Trop de temps en Z3+ sur les sorties faciles indique un risque de surentraînement.` : ''}
 
 ## OBJECTIF
 - Course : ${programme.race_name}

@@ -23,6 +23,10 @@
 	let streamsLoading = false;
 	let streamsError = '';
 
+	// HR Zones
+	let hrZones = activity.hr_zones || null;
+	let zonesLoading = false;
+
 	// AI Feedback
 	let aiFeedback = activity.ai_feedback || '';
 	let feedbackLoading = false;
@@ -69,6 +73,19 @@
 		} catch (e) { streamsError = e.message; }
 		finally { streamsLoading = false; }
 	}
+
+	async function fetchZones() {
+		if (hrZones) return;
+		zonesLoading = true;
+		try {
+			const res = await fetch(`/api/activities/${activity.id}/zones`, { method: 'POST' });
+			const data = await res.json();
+			if (!data.error) hrZones = data.hr_zones;
+		} catch (e) { /* silent */ }
+		finally { zonesLoading = false; }
+	}
+
+	const zoneColors = ['#3b82f6', '#22c55e', '#eab308', '#f97316', '#ef4444'];
 
 	// SVG chart helpers
 	function buildSvgPath(points, width, height, minY, maxY) {
@@ -120,6 +137,7 @@
 	import { onMount } from 'svelte';
 	onMount(() => {
 		if (!laps && activity.strava_id) fetchLaps();
+		if (!hrZones && activity.avg_hr) fetchZones();
 	});
 
 	// RPE (1-10)
@@ -282,6 +300,38 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- HR Zones -->
+	{#if hrZones && hrZones.some(z => z.time_seconds > 0)}
+		<div class="section zones-section">
+			<h2>❤️ Zones FC</h2>
+			<div class="zones-bar">
+				{#each hrZones as z, i}
+					{#if z.pct > 0}
+						<div class="zone-segment" style="width: {z.pct}%; background: {zoneColors[i]}" title="Z{z.zone} {z.label}: {z.pct}%">
+							{#if z.pct >= 8}
+								<span class="zone-bar-pct">{z.pct}%</span>
+							{/if}
+						</div>
+					{/if}
+				{/each}
+			</div>
+			<div class="zones-detail">
+				{#each hrZones as z, i}
+					<div class="zone-row">
+						<span class="zone-dot" style="background: {zoneColors[i]}"></span>
+						<span class="zone-label">Z{z.zone}</span>
+						<span class="zone-name">{z.label}</span>
+						<span class="zone-range">{z.min}–{z.max} bpm</span>
+						<span class="zone-time">{Math.floor(z.time_seconds / 60)}:{String(Math.round(z.time_seconds % 60)).padStart(2, '0')}</span>
+						<span class="zone-pct-val" style="color: {zoneColors[i]}">{z.pct}%</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{:else if zonesLoading}
+		<div class="section"><p class="loading-text">⏳ Calcul des zones FC...</p></div>
+	{/if}
 
 	<!-- RPE & Feeling Section -->
 	<div class="perception-section">
@@ -1010,4 +1060,79 @@
 		transition: all 0.15s;
 	}
 	.btn-get-streams:hover { border-color: #3b82f6; color: #3b82f6; }
+
+	/* HR Zones */
+	.zones-section { margin-bottom: 28px; }
+	.zones-bar {
+		display: flex;
+		height: 28px;
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		margin-bottom: 12px;
+	}
+	.zone-segment {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: width 0.4s ease;
+	}
+	.zone-bar-pct {
+		font-size: 0.68rem;
+		font-weight: 700;
+		color: white;
+		text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+	}
+	.zones-detail {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
+		padding: 10px 14px;
+	}
+	.zone-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 0.78rem;
+	}
+	.zone-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+	.zone-label {
+		font-weight: 700;
+		font-family: var(--font-mono);
+		width: 22px;
+		font-size: 0.72rem;
+	}
+	.zone-name {
+		color: var(--text-secondary);
+		flex: 1;
+		font-size: 0.75rem;
+	}
+	.zone-range {
+		color: var(--text-muted);
+		font-family: var(--font-mono);
+		font-size: 0.7rem;
+		width: 85px;
+		text-align: right;
+	}
+	.zone-time {
+		font-family: var(--font-mono);
+		font-weight: 600;
+		font-size: 0.75rem;
+		width: 44px;
+		text-align: right;
+	}
+	.zone-pct-val {
+		font-family: var(--font-mono);
+		font-weight: 700;
+		font-size: 0.75rem;
+		width: 32px;
+		text-align: right;
+	}
 </style>

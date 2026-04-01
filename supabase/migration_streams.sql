@@ -2,6 +2,7 @@
 -- Run this in Supabase SQL editor
 
 ALTER TABLE rt_activities ADD COLUMN IF NOT EXISTS streams JSONB;
+ALTER TABLE rt_activities ADD COLUMN IF NOT EXISTS hr_zones JSONB;
 
 -- Also add the activity detail columns if not already done
 ALTER TABLE rt_activities ADD COLUMN IF NOT EXISTS laps JSONB;
